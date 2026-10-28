@@ -1,0 +1,57 @@
+import { describe, expect, it } from '@jest/globals';
+import { guessCategory } from '../categories';
+import { guessCityFromHashtags, parseCaption } from '../parseCaption';
+
+describe('parseCaption', () => {
+  it('extracts pinned, numbered and labelled places', () => {
+    const caption = `5 spots you NEED in Lisbon 🇵🇹
+1. Time Out Market - go hungry
+2) Pastéis de Belém: the original custard tart
+📍 Cervejaria Ramiro, Lisbon
+Location: LX Factory
+Follow for more! Link in bio
+#lisbon #lisbontravel #portugal #travel`;
+    const { candidates, cityHint } = parseCaption(caption);
+    const names = candidates.map((c) => c.name);
+    expect(cityHint).toBe('Lisbon');
+    expect(names).toEqual(expect.arrayContaining(['Time Out Market', 'Pastéis de Belém', 'Cervejaria Ramiro', 'LX Factory']));
+    expect(names).not.toContain('Follow for more! Link in bio');
+    const ramiro = candidates.find((c) => c.name === 'Cervejaria Ramiro')!;
+    expect(ramiro.city).toBe('Lisbon');
+    expect(ramiro.confidence).toBeGreaterThan(0.8);
+  });
+
+  it('turns venue handles into low-confidence candidates', () => {
+    const { candidates } = parseCaption('Best matcha in town at @cafe_kitsune_tokyo ☕️');
+    expect(candidates[0]).toMatchObject({ name: 'Cafe Kitsune Tokyo' });
+    expect(candidates[0].confidence).toBeLessThan(0.5);
+  });
+
+  it('dedupes repeated mentions', () => {
+    const { candidates } = parseCaption('📍 Nishiki Market\n1. Nishiki Market');
+    expect(candidates).toHaveLength(1);
+  });
+
+  it('returns nothing for a caption without places', () => {
+    expect(parseCaption('what a day!! #fyp #travel').candidates).toHaveLength(0);
+  });
+});
+
+describe('guessCityFromHashtags', () => {
+  it('strips common suffixes and ignores generic tags', () => {
+    expect(guessCityFromHashtags('#tokyofood #tokyotravel #japan #fyp #travel')).toBe('Tokyo');
+  });
+});
+
+describe('guessCategory', () => {
+  it.each([
+    ['Ichiran Ramen', 'food'],
+    ['Blue Bottle Coffee', 'cafe'],
+    ['Fushimi Inari shrine', 'sight'],
+    ['Bar High Five cocktails', 'nightlife'],
+    ['Arashiyama bamboo forest', 'nature'],
+    ['Somewhere', 'other'],
+  ])('%s → %s', (text, cat) => {
+    expect(guessCategory(text)).toBe(cat);
+  });
+});
