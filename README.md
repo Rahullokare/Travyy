@@ -119,7 +119,7 @@ npx eas-cli@latest login
 npx eas-cli@latest init
 ```
 
-`init` creates the EAS project and prints its id. Paste the id into `EAS_PROJECT_ID` in [`app.config.ts`](app.config.ts) (EAS can't edit a dynamic config itself). Then build:
+`init` creates the EAS project and prints its id, then says it can't write to `app.config.ts`. That message is expected: EAS can't edit a dynamic config. Put the id in `EAS_PROJECT_ID` in [`app.config.ts`](app.config.ts). This repo is already linked to `@rahullokare77/travyy`, so skip `init` here. Then build:
 
 ```bash
 npx eas-cli@latest build --profile preview --platform android

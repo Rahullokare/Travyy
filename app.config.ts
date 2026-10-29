@@ -18,16 +18,15 @@ const VARIANTS: Record<Variant, { name: string; id: string; scheme: string }> = 
 const v = VARIANTS[variant] ?? VARIANTS.development;
 const LOCATION_COPY = 'Travyy uses your location to show saved spots near you.';
 
-/**
- * EAS project id. `npx eas-cli@latest init` creates the project but can't write into a
- * dynamic config, so paste the id it prints here (or set EAS_PROJECT_ID).
- */
-const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '';
+/** EAS project https://expo.dev/accounts/rahullokare77/projects/travyy (created by `eas init`). */
+const EAS_OWNER = 'rahullokare77';
+const EAS_PROJECT_ID = process.env.EAS_PROJECT_ID ?? '3b17632d-648c-494c-b26f-d0c7de93338d';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: v.name,
   slug: 'travyy',
+  owner: EAS_OWNER,
   // One scheme per variant so dev/preview/production builds don't steal each other's links.
   // Must stay a single string: the expo-sharing extension opens `<scheme>://expo-sharing`.
   scheme: v.scheme,
