@@ -92,11 +92,11 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8787 npm start
 |---|---|---|
 | `POST /extract` | `{ "url"?, "text"? }` | `{ caption, places: Candidate[] }`. Reads the caption, then extracts places with Claude. Returns 503 when no Claude key is set |
 | `POST /caption` | `{ "url" }` | `{ caption, source }`. Caption only, no AI needed |
-| `GET /health` | | `{ ok: true }` |
+| `GET /health` | | `{ ok: true, ai }`. `ai` says whether `/extract` is available; the app remembers it and skips `/extract` when it isn't |
 
 The server runs TypeScript directly on Node 22 (`node src/index.ts`) and ships with a `Dockerfile`; run its tests with `npm test`. If AI extraction fails, the app asks `/caption` and extracts on-device. If the server is unreachable, the app still works for everything except Instagram captions.
 
-**Instagram captions** come from Instagram's public embed page. This is unofficial: it can break when Instagram changes the page, and automated access may conflict with Instagram's terms. Set `INSTAGRAM_CAPTIONS=off` to turn it off instantly. Watch the `caption_lookup` log lines: `source: null` for Instagram means it stopped working. See `docs/ARCHITECTURE.md` (9b).
+**Instagram captions** come from Instagram's public embed page. The phone reads it first; the server is the fallback (and the only path for the web app). This is unofficial: it can break when Instagram changes the page, and automated access may conflict with Instagram's terms. Set `INSTAGRAM_CAPTIONS=off` to turn off the server path. In the `caption_lookup` log lines, `outcome` says why a lookup found nothing (`login_wall`, `no_post_data`, `no_caption`, `http_429`…). See `docs/ARCHITECTURE.md` (9b).
 
 ## Free deployment: API on Render + Android APK
 
@@ -149,7 +149,7 @@ iOS builds need an Apple Developer account. EAS registers the app group the shar
 
 1. Install a `development` (or `preview`) build. The share extension doesn't exist in Expo Go.
 2. In TikTok: Share → More (Android) or "…" (iOS) → **Travyy**. The app opens and finds the places from the caption.
-3. In Instagram: Share → **Travyy**. With the Travyy API configured, the server reads the reel's caption. For private posts, or without the server, the app keeps the link and asks you to paste the caption.
+3. In Instagram: Share → **Travyy**. The phone reads the reel's caption (the server tries too if the phone can't). For private posts, the app keeps the link and asks you to paste the caption.
 4. iOS only: the first time, you may need to tap "More" in the share sheet and enable Travyy.
 
 The web app is a static SPA: `npm run build:web`, then deploy `dist/` to any static host (EAS Hosting, Vercel, Netlify, Cloudflare Pages).

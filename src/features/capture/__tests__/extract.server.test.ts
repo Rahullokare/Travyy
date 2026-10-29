@@ -1,5 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { extractPlaces } from '@/features/capture/api/extract';
+import { pingApi, resetApiStatus } from '@/shared/lib/apiStatus';
 
 // This suite runs with a Travyy API configured.
 jest.mock('@/shared/config/env', () => ({
@@ -15,7 +17,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const REEL = 'https://www.instagram.com/reel/C9xYz/';
 
 let fetchMock: FetchMock;
-beforeEach(() => {
+beforeEach(async () => {
+  resetApiStatus();
+  await AsyncStorage.clear();
   jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
   fetchMock = jest.fn() as FetchMock;
   globalThis.fetch = fetchMock;
@@ -75,6 +79,39 @@ describe('extractPlaces with the Travyy API', () => {
     const result = await run(extractPlaces({ url: REEL }));
     expect(result).toMatchObject({ platform: 'instagram', candidates: [] });
     expect(calledUrls().filter((u) => u.endsWith('/caption'))).toHaveLength(1);
+  });
+
+  it('stops calling /extract once the server answers that it has no AI', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/extract')) return json({ error: 'AI extraction is not configured' }, 503);
+      if (url.endsWith('/caption'))
+        return json({ caption: '📍 Cervejaria Ramiro, Lisbon', source: 'embed-html' });
+      if (url.includes('nominatim'))
+        return json([{ lat: '38.7206', lon: '-9.1357', display_name: 'Cervejaria Ramiro' }]);
+      throw new Error(`unexpected ${url}`);
+    });
+    await run(extractPlaces({ url: REEL }));
+    const second = await run(extractPlaces({ url: REEL }));
+    expect(second.candidates[0]).toMatchObject({ name: 'Cervejaria Ramiro' });
+    expect(calledUrls().filter((u) => u.endsWith('/extract'))).toHaveLength(1);
+    expect(await AsyncStorage.getItem('travyy.api.ai')).toBe('false');
+  });
+
+  it('uses a caption read on the phone without waiting on a server that has no AI', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/health')) return json({ ok: true, ai: false });
+      if (url.endsWith('/embed/captioned/'))
+        return new Response('<div class="Caption">📍 Cervejaria Ramiro, Lisbon</div>');
+      if (url.includes('nominatim'))
+        return json([{ lat: '38.7206', lon: '-9.1357', display_name: 'Cervejaria Ramiro' }]);
+      throw new Error(`unexpected ${url}`);
+    });
+    await pingApi();
+    const result = await run(extractPlaces({ url: REEL }));
+    expect(result).toMatchObject({ engine: 'rules', caption: '📍 Cervejaria Ramiro, Lisbon' });
+    expect(calledUrls().some((u) => u.endsWith('/extract') || u.endsWith('/caption'))).toBe(false);
   });
 
   it('does not ask the server for a caption the user already pasted', async () => {

@@ -92,6 +92,25 @@ describe('extractPlaces', () => {
     expect(result.candidates[0]).toMatchObject({ name: 'Cervejaria Ramiro', lat: 38.7206 });
   });
 
+  it('reads an Instagram caption from the embed page on the phone', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === 'https://www.instagram.com/p/C9xYz-Ab/embed/captioned/') {
+        return new Response(
+          '<div class="Caption"><a class="CaptionUsername" href="#">lisbon.eats</a><br />Dinner tonight 🦐<br />📍 Cervejaria Ramiro, Lisbon</div><div class="Footer"></div>',
+        );
+      }
+      if (url.includes('Ramiro'))
+        return json([{ lat: '38.7206', lon: '-9.1357', display_name: 'Cervejaria Ramiro' }]);
+      return json([]);
+    });
+    const result = await run(extractPlaces({ url: 'https://www.instagram.com/reel/C9xYz-Ab/?igsh=MWQ1' }));
+    expect(result).toMatchObject({ platform: 'instagram', engine: 'rules' });
+    expect(result.caption).toContain('📍 Cervejaria Ramiro, Lisbon');
+    expect(result.caption).not.toContain('lisbon.eats');
+    expect(result.candidates[0]).toMatchObject({ name: 'Cervejaria Ramiro', lat: 38.7206 });
+  });
+
   it('falls back to searching the place name when a Maps short link cannot be resolved', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);

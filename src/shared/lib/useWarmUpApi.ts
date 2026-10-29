@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { env } from '@/shared/config/env';
-import { fetchWithTimeout } from './http';
+import { pingApi } from './apiStatus';
 
 const MIN_INTERVAL_MS = 5 * 60_000;
 let lastPing = 0;
@@ -10,7 +10,7 @@ let lastPing = 0;
 export function warmUpApi() {
   if (!env.apiUrl || Date.now() - lastPing < MIN_INTERVAL_MS) return;
   lastPing = Date.now();
-  fetchWithTimeout(`${env.apiUrl}/health`, { timeoutMs: 90_000 }).catch(() => {});
+  pingApi().catch(() => {});
 }
 
 /**

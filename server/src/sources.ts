@@ -1,4 +1,5 @@
-import { decodeHtmlEntities, fetchInstagramCaption, isInstagramUrl } from './instagram.ts';
+import { fetchInstagramCaption } from './instagram.ts';
+import { decodeHtmlEntities, isInstagramUrl } from './instagramEmbed.ts';
 
 const USER_AGENT = process.env.GEOCODER_USER_AGENT ?? 'Travyy/1.0 (contact: set GEOCODER_USER_AGENT)';
 
@@ -10,15 +11,23 @@ async function get(url: string, ms = 10_000): Promise<Response> {
   });
 }
 
-export type CaptionLookup = { text: string; source: string };
+export interface CaptionLookup {
+  text?: string;
+  source: string | null;
+  /** Extra `caption_lookup` log fields: outcome, HTTP status, page size. Never caption text. */
+  detail?: Record<string, string | number | boolean | undefined>;
+}
 
 /**
  * Public caption lookup: oEmbed for TikTok/YouTube, the embed page for Instagram
  * (see instagram.ts), Open Graph tags for anything else.
  */
-export async function fetchCaption(url: string): Promise<CaptionLookup | undefined> {
+export async function fetchCaption(url: string): Promise<CaptionLookup> {
   try {
-    if (isInstagramUrl(url)) return await fetchInstagramCaption(url);
+    if (isInstagramUrl(url)) {
+      const { caption, ...detail } = await fetchInstagramCaption(url);
+      return { text: caption?.text, source: caption?.source ?? null, detail };
+    }
     const host = new URL(url).hostname;
     const oembed = host.endsWith('tiktok.com')
       ? ['tiktok-oembed', `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`]
@@ -31,7 +40,7 @@ export async function fetchCaption(url: string): Promise<CaptionLookup | undefin
       if (title) return { text: title, source: oembed[0] };
     }
     const r = await get(url);
-    if (!r.ok) return undefined;
+    if (!r.ok) return { source: null, detail: { outcome: `http_${r.status}`, status: r.status } };
     const html = (await r.text()).slice(0, 500_000);
     const meta = (prop: string) =>
       html.match(
@@ -41,9 +50,9 @@ export async function fetchCaption(url: string): Promise<CaptionLookup | undefin
       .filter(Boolean)
       .map((t) => decodeHtmlEntities(t!))
       .join('\n');
-    return text ? { text, source: 'open-graph' } : undefined;
+    return text ? { text, source: 'open-graph' } : { source: null, detail: { outcome: 'no_caption' } };
   } catch {
-    return undefined;
+    return { source: null, detail: { outcome: 'network_error' } };
   }
 }
 

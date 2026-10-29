@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { CandidateSchema, type Candidate, type SourcePlatform } from '@/domain/models';
 import { guessCategory } from '@/features/places/categories';
 import { env } from '@/shared/config/env';
-import { fetchJson } from '@/shared/lib/http';
+import { apiHasAi, rememberApiHasAi } from '@/shared/lib/apiStatus';
+import { fetchJson, HttpError } from '@/shared/lib/http';
 import { logger } from '@/shared/lib/logger';
 import { detectPlatform, extractUrl, parseGoogleMapsUrl } from '../links';
 import { parseCaption } from '../parseCaption';
@@ -36,7 +37,7 @@ const ApiResponseSchema = z.object({
 /**
  * Link/caption → candidate places. Strategy, best first:
  *  1. Google Maps links are parsed directly (exact, free).
- *  2. AI backend, if configured.
+ *  2. AI backend, if the API has it (Instagram captions are read on the phone first).
  *  3. On-device rules + OpenStreetMap geocoding (always available).
  *  4. A bare place name falls back to place search.
  */
@@ -67,27 +68,31 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
   let caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
 
   if (env.apiUrl) {
-    try {
-      const res = ApiResponseSchema.parse(
-        await fetchJson(`${env.apiUrl}/extract`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, text: caption }),
-          // Cold start on free hosting (≤60 s) + AI extraction.
-          timeoutMs: 90_000,
-          signal,
-        }),
-      );
-      return {
-        platform,
-        sourceUrl: url,
-        caption: res.caption ?? caption,
-        candidates: res.places,
-        engine: 'ai',
-      };
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      logger.warn('AI extraction failed; falling back to on-device rules', { error: String(error) });
+    // Skip a server known to have no AI (the free setup): waking it would only get a 503.
+    if ((await apiHasAi()) !== false) {
+      try {
+        const res = ApiResponseSchema.parse(
+          await fetchJson(`${env.apiUrl}/extract`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, text: caption }),
+            // Cold start on free hosting (≤60 s) + AI extraction.
+            timeoutMs: 90_000,
+            signal,
+          }),
+        );
+        return {
+          platform,
+          sourceUrl: url,
+          caption: res.caption ?? caption,
+          candidates: res.places,
+          engine: 'ai',
+        };
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (error instanceof HttpError && error.status === 503) rememberApiHasAi(false);
+        logger.warn('AI extraction failed; falling back to on-device rules', { error: String(error) });
+      }
     }
     // The device couldn't read the caption (Instagram, or any link on web): the server
     // can, even when AI extraction is unavailable. Then the on-device rules take over.

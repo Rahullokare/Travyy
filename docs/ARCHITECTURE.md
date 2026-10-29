@@ -27,7 +27,7 @@ src/
 server/         Node API: Claude extraction + geocoding
 ```
 
-**Dependency direction:** `app → features → shared/store/domain`. Features may import other features' public pieces (a component, a pure function), but nothing in `shared/` imports from `features/`. Business logic lives in plain functions (`planner.ts`, `parseCaption.ts`, `links.ts`, `share.ts`), not in components, so it can be unit-tested without rendering.
+**Dependency direction:** `app → features → shared/store/domain`. Features may import other features' public pieces (a component, a pure function), but nothing in `shared/` imports from `features/`. One file crosses into `server/`: `server/src/instagramEmbed.ts`, the Instagram embed-page parser (9b). It has no imports and no Node or React Native APIs, so both projects compile it; keep it that way. Business logic lives in plain functions (`planner.ts`, `parseCaption.ts`, `links.ts`, `share.ts`), not in components, so it can be unit-tested without rendering.
 
 ## Decisions
 
@@ -73,12 +73,12 @@ The share extension is native code, which Expo Go can't load, so the project now
 - **One route:** `src/app/expo-sharing.tsx` reads what was shared (`readIncomingShare`, which has a `.web.ts` variant that reads Web Share Target query params). It turns the payload into `{ url, text }`, stripping share-sheet boilerplate and tracking params, then replaces itself with `/add`. The existing capture flow extracts from there, so native, web and deep links share one pipeline.
 - **Scheme must be a single string per variant** (`travyy-dev`, `travyy-preview`, `travyy`). The plugin writes it into the extension's Info.plist and Android strings; an array produces an invalid scheme and the extension crashes.
 - **Shares before onboarding** are held in an in-memory inbox and delivered from the tabs layout once onboarding is done. Pushing from the root layout lost the share: the protected-route switch resets navigation at that moment. The end-to-end test caught this.
-- **Caption sources:** TikTok and YouTube oEmbed, with TikTok short links resolved on native. Instagram is read by the server (9b). If the server can't read it, the app keeps the link and asks for the caption.
+- **Caption sources:** TikTok and YouTube oEmbed, with TikTok short links resolved on native. Instagram is read on the phone, with the server as fallback (9b). If neither can read it, the app keeps the link and asks for the caption.
 
 ### 9b. Instagram captions from the embed page (server-side)
 *Decided 2026-10-29, at the product owner's request, knowing the trade-offs below.*
 
-Instagram has no public caption API, and post pages require login. The embed page (`/p/<shortcode>/embed/captioned/`), which Instagram serves so public posts can be embedded on other sites, includes the caption. `server/src/instagram.ts` reads it.
+Instagram has no public caption API, and post pages require login. The embed page (`/p/<shortcode>/embed/captioned/`), which Instagram serves so public posts can be embedded on other sites, includes the caption. `server/src/instagramEmbed.ts` parses it; the phone (`src/features/capture/api/instagram.ts`) and the server (`server/src/instagram.ts`) both fetch it.
 
 - **Risks accepted:** it's unofficial. It can break without notice when Instagram changes the page, and automated access may conflict with Instagram's terms.
 - **Guardrails:**
@@ -88,8 +88,9 @@ Instagram has no public caption API, and post pages require login. The embed pag
   - `INSTAGRAM_CAPTIONS=off` turns it off instantly
   - caption text is never logged
 - **Resilient parsing:** three strategies, tried in order: embedded JSON (including JSON nested in strings), the rendered caption block, then description meta. Fixture tests cover each.
-- **Monitoring:** each lookup logs `caption_lookup` with the strategy that matched (`source`). A drift from `embed-json` to `embed-html`, or to `null`, is the early warning that the format changed.
-- **Server-only by design:** browsers can't fetch it (CORS), and doing it from millions of phones would look like abuse and couldn't be switched off. The app calls `POST /caption` when AI extraction is unavailable, so Instagram works even without Claude.
+- **Monitoring:** each server lookup logs `caption_lookup` with the strategy that matched (`source`), or, when nothing matched, the `outcome`: `login_wall`, `no_post_data` (a page without the post, typical of a blocked IP), `no_caption`, `http_<status>`, `timeout` or `network_error`, plus `status`, `bytes` and `cached`. A drift from `embed-json` to `embed-html` is the early warning that the format is changing; `no_caption` on posts that do have captions means the parser needs a new strategy.
+- **Phone first, server as fallback** *(revised 2026-10-29 after the first device test)*. The first version read captions only on the server, reasoning that requests from many phones would look like abuse and couldn't be switched off. On Render, every lookup came back without a caption: Instagram commonly refuses cloud-server IPs. A phone makes one request when its user shares a post they just watched, which is what any site embedding the post causes, and that's a better pattern than one server IP making everyone's requests. The server stays the fallback (and the only path on web, where CORS blocks the request), so Instagram works even without Claude.
+- **Switching it off:** `INSTAGRAM_CAPTIONS=off` stops the server path. The phone path ships with the app; turning it off needs an app update (or EAS Update, once set up).
 - **If it breaks for good:** fall back to the paste flow (already in place). Then consider the official Instagram Graph API's oEmbed (needs a Meta app review), or understanding the video itself (transcription and on-screen text).
 
 ### 10. Observability seams
@@ -104,8 +105,8 @@ Node 22.18+ strips TypeScript types natively, so `node src/index.ts` runs in pro
 ### 13. Free hosting first (Render), designed for its limits
 The API runs on Render's free web service, defined in `render.yaml` (Node runtime, so there's no Docker step; Node 22 runs the TypeScript directly).
 - **Sleeping server:** free services sleep after ~15 idle minutes and take 30–60 s to wake. The app pings `/health` on launch and on return to the foreground (`useWarmUpApi`), allows up to 90 s for server calls, and explains the wait in the UI after 8 s.
-- **Claude is optional and off in the free setup:** `/extract` answers 503 without credentials and the app extracts on-device, while `/caption` (Instagram) keeps working.
-- **Known risk:** Instagram blocks some cloud IP ranges more often than residential ones. When it does, Instagram shares fall back to pasting the caption.
+- **Claude is optional and off in the free setup:** `/extract` answers 503 without credentials and the app extracts on-device, while `/caption` (Instagram) keeps working. `/health` reports `ai`, and the app remembers it (`apiStatus.ts`), so it doesn't wake a sleeping server just to be told no.
+- **Instagram refuses Render's IP:** confirmed in the first device test, so phones read Instagram captions themselves (9b) and the server is only the fallback.
 - **Move to paid hosting** (no sleep) when real users arrive. The server and app code don't change; only the plan does.
 
 ## Quality gates

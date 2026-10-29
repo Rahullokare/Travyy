@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
+import { clearInstagramCache, fetchInstagramCaption, type Fetcher } from './instagram.ts';
 import {
   captionFromEmbedHtml,
   captionFromEmbeddedJson,
   captionFromMeta,
-  clearInstagramCache,
-  fetchInstagramCaption,
+  diagnoseEmbedPage,
   instagramShortcode,
   parseEmbedPage,
-  type Fetcher,
-} from './instagram.ts';
+} from './instagramEmbed.ts';
 
 // Fixtures mirror the shapes Instagram's embed page has used. They are hand-built
 // (the build sandbox can't reach instagram.com), so watch `caption_lookup` logs in production.
@@ -22,6 +21,10 @@ const HTML_EMBED = `<div class="Embed"><div class="Caption"><a class="CaptionUse
 const META_EMBED = `<head><meta property="og:description" content="1,234 likes, 56 comments - lisbon.eats on May 1, 2026: &quot;📍 Cervejaria Ramiro, Lisbon&quot;. " /></head>`;
 
 const LOGIN_WALL = `<html><head><meta property="og:description" content="1,234 likes, 56 comments" /><title>Login • Instagram</title></head></html>`;
+
+const NO_CAPTION_EMBED = `<div class="Embed"><div class="EmbeddedMedia"><img src="x.jpg" /></div><div class="Footer">Instagram</div></div>`;
+
+const EMPTY_SHELL = `<html><head><title>Instagram</title></head><body><div id="root"></div></body></html>`;
 
 describe('instagramShortcode', () => {
   it('handles post, reel, reels, tv and user-prefixed URLs', () => {
@@ -74,6 +77,16 @@ describe('caption parsing strategies', () => {
     assert.equal(parseEmbedPage(LOGIN_WALL), undefined);
   });
 
+  it('says why a page has no caption', () => {
+    assert.equal(diagnoseEmbedPage(LOGIN_WALL), 'login_wall');
+    assert.equal(
+      diagnoseEmbedPage('<html></html>', 'https://www.instagram.com/accounts/login/?next=x'),
+      'login_wall',
+    );
+    assert.equal(diagnoseEmbedPage(EMPTY_SHELL), 'no_post_data');
+    assert.equal(diagnoseEmbedPage(NO_CAPTION_EMBED), 'no_caption');
+  });
+
   it('reports which strategy matched, best first', () => {
     assert.equal(parseEmbedPage(JSON_EMBED + HTML_EMBED)?.source, 'embed-json');
     assert.equal(parseEmbedPage(HTML_EMBED + META_EMBED)?.source, 'embed-html');
@@ -101,9 +114,11 @@ describe('fetchInstagramCaption', () => {
     });
     const first = await fetchInstagramCaption('https://www.instagram.com/reel/C9xYz/?igsh=abc', fetcher);
     const second = await fetchInstagramCaption('https://www.instagram.com/p/C9xYz/', fetcher);
-    assert.equal(first?.source, 'embed-html');
-    assert.match(first!.text, /Cervejaria Ramiro/);
-    assert.deepEqual(second, first);
+    assert.equal(first.outcome, 'ok');
+    assert.equal(first.caption?.source, 'embed-html');
+    assert.match(first.caption!.text, /Cervejaria Ramiro/);
+    assert.equal(first.status, 200);
+    assert.deepEqual(second, { ...first, cached: true });
     assert.equal(calls.length, 1, 'second lookup served from cache');
   });
 
@@ -111,9 +126,25 @@ describe('fetchInstagramCaption', () => {
     const { fetcher, calls } = fakeFetcher({
       'https://www.instagram.com/p/Cprivate1/embed/captioned/': () => new Response(LOGIN_WALL),
     });
-    assert.equal(await fetchInstagramCaption('https://www.instagram.com/p/Cprivate1/', fetcher), undefined);
-    assert.equal(await fetchInstagramCaption('https://www.instagram.com/p/Cprivate1/', fetcher), undefined);
+    const first = await fetchInstagramCaption('https://www.instagram.com/p/Cprivate1/', fetcher);
+    const second = await fetchInstagramCaption('https://www.instagram.com/p/Cprivate1/', fetcher);
+    assert.equal(first.caption, undefined);
+    assert.equal(first.outcome, 'login_wall');
+    assert.equal(second.cached, true);
     assert.equal(calls.length, 1);
+  });
+
+  it('reports pages served without the post', async () => {
+    const { fetcher } = fakeFetcher({
+      'https://www.instagram.com/p/Cshell01/embed/captioned/': () => new Response(EMPTY_SHELL),
+    });
+    const result = await fetchInstagramCaption('https://www.instagram.com/p/Cshell01/', fetcher);
+    assert.deepEqual(result, {
+      caption: undefined,
+      outcome: 'no_post_data',
+      status: 200,
+      bytes: EMPTY_SHELL.length,
+    });
   });
 
   it('resolves /share/ links to the post before fetching', async () => {
@@ -126,7 +157,7 @@ describe('fetchInstagramCaption', () => {
       'https://www.instagram.com/p/CshareAB/embed/captioned/': () => new Response(JSON_EMBED),
     });
     const result = await fetchInstagramCaption('https://www.instagram.com/share/reel/BAxyz123/', fetcher);
-    assert.equal(result?.source, 'embed-json');
+    assert.equal(result.caption?.source, 'embed-json');
     assert.deepEqual(calls, [
       'https://www.instagram.com/share/reel/BAxyz123/',
       'https://www.instagram.com/p/CshareAB/embed/captioned/',
@@ -137,13 +168,20 @@ describe('fetchInstagramCaption', () => {
     const { fetcher } = fakeFetcher({
       'https://www.instagram.com/p/C429err/': () => new Response('rate limited', { status: 429 }),
     });
-    assert.equal(await fetchInstagramCaption('https://www.instagram.com/p/C429err/', fetcher), undefined);
-    assert.equal(await fetchInstagramCaption('https://www.instagram.com/p/Cnetwork/', fetcher), undefined);
+    assert.deepEqual(await fetchInstagramCaption('https://www.instagram.com/p/C429err/', fetcher), {
+      outcome: 'http_429',
+      status: 429,
+    });
+    assert.deepEqual(await fetchInstagramCaption('https://www.instagram.com/p/Cnetwork/', fetcher), {
+      outcome: 'network_error',
+    });
   });
 
   it('ignores non-Instagram URLs', async () => {
     const { fetcher, calls } = fakeFetcher({});
-    assert.equal(await fetchInstagramCaption('https://www.tiktok.com/@a/video/1', fetcher), undefined);
+    assert.deepEqual(await fetchInstagramCaption('https://www.tiktok.com/@a/video/1', fetcher), {
+      outcome: 'no_shortcode',
+    });
     assert.equal(calls.length, 0);
   });
 });

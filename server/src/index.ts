@@ -105,11 +105,12 @@ async function readRequest<T>(req: IncomingMessage, res: ServerResponse, schema:
 async function lookupCaption(url: string) {
   const started = Date.now();
   const found = await fetchCaption(url);
-  log(found ? 'info' : 'warn', 'caption_lookup', {
+  log(found.text ? 'info' : 'warn', 'caption_lookup', {
     host: new URL(url).hostname,
-    source: found?.source ?? null,
-    chars: found?.text.length ?? 0,
+    source: found.source,
+    chars: found.text?.length ?? 0,
     ms: Date.now() - started,
+    ...found.detail,
   });
   return found;
 }
@@ -118,7 +119,7 @@ async function handleCaption(req: IncomingMessage, res: ServerResponse) {
   const body = await readRequest(req, res, CaptionRequest);
   if (!body) return;
   const found = await lookupCaption(body.url);
-  return send(req, res, 200, { caption: found?.text ?? null, source: found?.source ?? null });
+  return send(req, res, 200, { caption: found.text ?? null, source: found.source });
 }
 
 async function handleExtract(req: IncomingMessage, res: ServerResponse) {
@@ -171,7 +172,7 @@ const server = createServer((req, res) => {
     res.writeHead(204, corsHeaders(req));
     return res.end();
   }
-  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true });
+  if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true, ai: AI_ENABLED });
   if (req.method === 'POST' && req.url === '/extract') return void handleExtract(req, res);
   if (req.method === 'POST' && req.url === '/caption') return void handleCaption(req, res);
   return send(req, res, 404, { error: 'not found' });
