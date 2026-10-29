@@ -1,0 +1,122 @@
+import { z } from 'zod';
+import { CandidateSchema, type Candidate, type SourcePlatform } from '@/domain/models';
+import { guessCategory } from '@/features/places/categories';
+import { env } from '@/shared/config/env';
+import { fetchJson } from '@/shared/lib/http';
+import { logger } from '@/shared/lib/logger';
+import { detectPlatform, extractUrl, parseGoogleMapsUrl } from '../links';
+import { parseCaption } from '../parseCaption';
+import { fetchCaption } from './captions';
+import { geocodeCandidates, reverseGeocode, searchPlaces } from './geocoding';
+
+export type ExtractionEngine = 'ai' | 'rules' | 'maps-link' | 'search';
+
+export interface ExtractionResult {
+  platform: SourcePlatform;
+  sourceUrl?: string;
+  caption?: string;
+  candidates: Candidate[];
+  /** Which engine produced the result — shown to the user for transparency. */
+  engine: ExtractionEngine;
+}
+
+export interface ExtractionInput {
+  url?: string;
+  text?: string;
+}
+
+/** Contract of POST /extract on the Travyy API (server/src/index.ts). */
+const ApiResponseSchema = z.object({
+  caption: z.string().nullable(),
+  places: z.array(CandidateSchema),
+});
+
+/**
+ * Link/caption → candidate places. Strategy, best first:
+ *  1. Google Maps links are parsed directly (exact, free).
+ *  2. AI backend, if configured.
+ *  3. On-device rules + OpenStreetMap geocoding (always available).
+ *  4. A bare place name falls back to place search.
+ */
+export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal): Promise<ExtractionResult> {
+  const url = extractUrl(input.url ?? '') ?? extractUrl(input.text ?? '');
+  const typed = input.text?.replace(url ?? '', '').trim() || undefined;
+  const platform: SourcePlatform = url ? detectPlatform(url) : 'manual';
+
+  if (url && platform === 'google_maps') {
+    return { platform, sourceUrl: url, candidates: await fromMapsLink(url, signal), engine: 'maps-link' };
+  }
+
+  const fetched = url && !typed ? await fetchCaption(url, platform, signal) : undefined;
+  const caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
+
+  if (env.apiUrl) {
+    try {
+      const res = ApiResponseSchema.parse(
+        await fetchJson(`${env.apiUrl}/extract`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, text: caption }),
+          timeoutMs: 45_000,
+          signal,
+        }),
+      );
+      return {
+        platform,
+        sourceUrl: url,
+        caption: res.caption ?? caption,
+        candidates: res.places,
+        engine: 'ai',
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      logger.warn('AI extraction failed; falling back to on-device rules', { error: String(error) });
+    }
+  }
+
+  if (!caption) return { platform, sourceUrl: url, candidates: [], engine: 'rules' };
+
+  const { candidates, cityHint } = parseCaption(caption);
+  if (candidates.length > 0) {
+    const geocoded = await geocodeCandidates(candidates.slice(0, 12), { cityHint, signal });
+    return { platform, sourceUrl: url, caption, candidates: geocoded, engine: 'rules' };
+  }
+
+  // No list structure: treat short text like "Ichiran Shibuya" as a place search.
+  if (!url && caption.length <= 80) {
+    const hits = await searchPlaces(caption, { limit: 5, signal });
+    return { platform, caption, candidates: hits, engine: 'search' };
+  }
+  return { platform, sourceUrl: url, caption, candidates: [], engine: 'rules' };
+}
+
+async function fromMapsLink(url: string, signal?: AbortSignal): Promise<Candidate[]> {
+  let full = url;
+  if (/goo\.gl/.test(url)) {
+    // Short links redirect to the full URL. Native follows it; browsers usually block it (CORS).
+    try {
+      full = (await fetch(url, { signal })).url || url;
+    } catch {
+      // keep the short link
+    }
+  }
+  const info = parseGoogleMapsUrl(full);
+  if (!info.name && info.lat === undefined) return [];
+  const name = info.name ?? 'Dropped pin';
+  if (info.lat !== undefined && info.lng !== undefined) {
+    const where = await reverseGeocode({ lat: info.lat, lng: info.lng }, signal);
+    return [
+      {
+        name,
+        lat: info.lat,
+        lng: info.lng,
+        city: where?.city,
+        country: where?.country,
+        address: where?.address,
+        category: guessCategory(name),
+        confidence: 0.95,
+      },
+    ];
+  }
+  return geocodeCandidates([{ name, category: guessCategory(name), confidence: 0.9 }], { signal });
+}

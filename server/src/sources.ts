@@ -24,8 +24,13 @@ export async function fetchCaption(url: string): Promise<string | undefined> {
     if (!r.ok) return undefined;
     const html = (await r.text()).slice(0, 500_000);
     const meta = (prop: string) =>
-      html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))?.[1];
-    return [meta('og:title'), meta('og:description') ?? meta('description')].filter(Boolean).join('\n') || undefined;
+      html.match(
+        new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'),
+      )?.[1];
+    return (
+      [meta('og:title'), meta('og:description') ?? meta('description')].filter(Boolean).join('\n') ||
+      undefined
+    );
   } catch {
     return undefined;
   }

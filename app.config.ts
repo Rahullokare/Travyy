@@ -1,0 +1,78 @@
+import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+/**
+ * Build variants let dev, preview and production builds sit side by side on one device.
+ * Select with APP_VARIANT (set per profile in eas.json); defaults to development.
+ *
+ * Note: this is a dynamic config, so `expo install` cannot auto-add plugins.
+ * Add a package's config plugin to `plugins` below by hand when its docs require one.
+ */
+type Variant = 'development' | 'preview' | 'production';
+const variant = (process.env.APP_VARIANT ?? 'development') as Variant;
+
+const VARIANTS: Record<Variant, { name: string; id: string; scheme: string }> = {
+  development: { name: 'Travyy (Dev)', id: 'app.travyy.dev', scheme: 'travyy-dev' },
+  preview: { name: 'Travyy (Preview)', id: 'app.travyy.preview', scheme: 'travyy-preview' },
+  production: { name: 'Travyy', id: 'app.travyy', scheme: 'travyy' },
+};
+const v = VARIANTS[variant] ?? VARIANTS.development;
+const LOCATION_COPY = 'Travyy uses your location to show saved spots near you.';
+
+export default ({ config }: ConfigContext): ExpoConfig => ({
+  ...config,
+  name: v.name,
+  slug: 'travyy',
+  // `travyy` always works for deep links (travyy://add?url=…); variant schemes avoid clashes between builds.
+  scheme: [v.scheme, 'travyy'].filter((s, i, all) => all.indexOf(s) === i),
+  version: '1.0.0',
+  orientation: 'portrait',
+  icon: './assets/icon.png',
+  userInterfaceStyle: 'automatic',
+  ios: {
+    bundleIdentifier: v.id,
+    supportsTablet: true,
+    infoPlist: { NSLocationWhenInUseUsageDescription: LOCATION_COPY, ITSAppUsesNonExemptEncryption: false },
+  },
+  android: {
+    package: v.id,
+    adaptiveIcon: {
+      backgroundColor: '#FFE9E2',
+      foregroundImage: './assets/android-icon-foreground.png',
+      backgroundImage: './assets/android-icon-background.png',
+      monochromeImage: './assets/android-icon-monochrome.png',
+    },
+    permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+    predictiveBackGestureEnabled: false,
+    // Release builds need a Google Maps key for react-native-maps on Android (Expo Go has its own).
+    ...(process.env.GOOGLE_MAPS_ANDROID_API_KEY
+      ? { config: { googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY } } }
+      : {}),
+  },
+  web: {
+    output: 'single',
+    favicon: './assets/favicon.png',
+    name: 'Travyy',
+    shortName: 'Travyy',
+    themeColor: '#FF5A36',
+    backgroundColor: '#FAF7F2',
+  },
+  plugins: [
+    'expo-router',
+    'expo-web-browser',
+    ['expo-location', { locationWhenInUsePermission: LOCATION_COPY }],
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/splash-icon.png',
+        imageWidth: 160,
+        backgroundColor: '#FAF7F2',
+        dark: { image: './assets/splash-icon.png', backgroundColor: '#16130F' },
+      },
+    ],
+  ],
+  experiments: { typedRoutes: true },
+  extra: {
+    appVariant: variant,
+    ...(process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {}),
+  },
+});

@@ -2,7 +2,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 
-const CATEGORIES = ['food', 'cafe', 'nightlife', 'sight', 'nature', 'stay', 'shopping', 'activity', 'other'] as const;
+const CATEGORIES = [
+  'food',
+  'cafe',
+  'nightlife',
+  'sight',
+  'nature',
+  'stay',
+  'shopping',
+  'activity',
+  'other',
+] as const;
 
 const ExtractionSchema = z.object({
   places: z.array(

@@ -1,37 +1,72 @@
-import { Stack } from 'expo-router';
+import { QueryClientProvider } from '@tanstack/react-query';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider as NavigationThemeProvider,
+  type ErrorBoundaryProps,
+} from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useSyncExternalStore } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useStore } from '../lib/store';
-import { colors } from '../lib/theme';
+import { logger } from '@/shared/lib/logger';
+import { queryClient } from '@/shared/query/queryClient';
+import { AppThemeProvider, useTheme } from '@/shared/theme';
+import { Button, EmptyState, Screen } from '@/shared/ui';
+import { hydration, useAppStore } from '@/store';
 
-function useHydrated() {
-  return useSyncExternalStore(useStore.persist.onFinishHydration, useStore.persist.hasHydrated);
-}
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const hydrated = useHydrated();
-  const onboarded = useStore((s) => s.onboarded);
-
-  if (!hydrated) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <QueryClientProvider client={queryClient}>
+        <AppThemeProvider>
+          <RootNavigator />
+        </AppThemeProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function RootNavigator() {
+  const theme = useTheme();
+  const hydrated = useSyncExternalStore(hydration.subscribe, hydration.isHydrated, hydration.isHydrated);
+  const onboarded = useAppStore((s) => s.onboarded);
+
+  useEffect(() => {
+    if (hydrated) SplashScreen.hideAsync().catch(() => {});
+  }, [hydrated]);
+
+  // Map our tokens onto React Navigation so headers, tab bar and transitions match.
+  const navigationTheme = useMemo(() => {
+    const base = theme.dark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: theme.colors.primary,
+        background: theme.colors.background,
+        card: theme.colors.background,
+        text: theme.colors.text,
+        border: theme.colors.border,
+      },
+    };
+  }, [theme]);
+
+  // Keep the splash screen up until persisted state is loaded: no flash of onboarding.
+  if (!hydrated) return null;
+
+  return (
+    <NavigationThemeProvider value={navigationTheme}>
+      <StatusBar style={theme.dark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
-          headerTintColor: colors.text,
-          headerStyle: { backgroundColor: colors.bg },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.bg },
-          headerBackTitle: 'Back',
+          headerBackButtonDisplayMode: 'minimal',
+          headerTitleStyle: { fontWeight: '700' },
+          contentStyle: { backgroundColor: theme.colors.background },
         }}
       >
         <Stack.Protected guard={onboarded}>
@@ -46,6 +81,25 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack.Protected>
       </Stack>
-    </SafeAreaProvider>
+    </NavigationThemeProvider>
+  );
+}
+
+/** Route-level crash screen (Expo Router renders this when any screen throws). */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    logger.error(error, { where: 'ErrorBoundary' });
+  }, [error]);
+  return (
+    <AppThemeProvider>
+      <Screen>
+        <EmptyState
+          emoji="🧯"
+          title="Something went wrong"
+          body="The error has been logged. Try again, and if it keeps happening, restart the app."
+          action={<Button title="Try again" onPress={retry} />}
+        />
+      </Screen>
+    </AppThemeProvider>
   );
 }
