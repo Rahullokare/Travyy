@@ -36,10 +36,14 @@ Each decision below records what we chose and why, so later changes are delibera
 ### 1. Expo managed workflow + Expo Router
 Continuous Native Generation (no checked-in `ios/`/`android/`), EAS for builds, OTA updates and store submission. File-based routing gives deep links for free. That matters because `travyy://add?url=…` is how the share extension will hand links to the app.
 
-### 2. One `<Map>` API, two engines
-`react-native-maps` (Apple Maps / Google Maps) has no web support, which is why the first web build failed. `src/shared/map` exposes one component and one imperative handle (`fitTo`, `centerOn`). Metro picks `Map.web.tsx` on web, which uses **MapLibre GL JS 5** with free OpenFreeMap vector tiles (no API key). We pinned v5 because v6 loads its web worker via `import.meta.url`, which Metro does not support. An ESLint rule forbids importing `react-native-maps` anywhere else.
+### 2. One `<Map>` API, MapLibre everywhere
+`src/shared/map` exposes one component and one imperative handle (`fitTo`, `centerOn`), so screens never branch on platform.
 
-*Revisit:* `expo-maps` once we need a development build anyway (see 9).
+- **Web:** `Map.web.tsx` uses **MapLibre GL JS 5**. It's pinned to v5 because v6 loads its web worker via `import.meta.url`, which Metro doesn't support.
+- **iOS/Android:** `MapLibreNative.tsx` uses **MapLibre Native** (`@maplibre/maplibre-react-native` 11).
+- **Same tiles everywhere:** free OpenFreeMap vector tiles and the same style, with no API key and no billing account. This replaced `react-native-maps`: its Android build needs a Google Maps key, and Google normally requires a billing account to issue one. The original reason for leaving it was that it has no web support at all.
+- **Expo Go:** MapLibre looks up its native modules the moment it's imported, so `Map.tsx` loads it only when `MLRNMapViewModule` is registered. In Expo Go it renders a placeholder instead of crashing.
+- **Guardrail:** ESLint forbids importing either MapLibre package outside `src/shared/map`.
 
 ### 3. Platform adapters instead of `Platform.OS` checks in screens
 `Alert`, `Share` and haptics silently do nothing on web. `src/shared/lib/platform.ts` provides `confirm`, `notify`, `shareText`, `haptics`, `openInMaps` and `openUrl`, each correct per platform. ESLint blocks the raw APIs outside that file.
@@ -62,7 +66,7 @@ There's no styling library to lock into. `makeStyles((theme) => ({…}))` create
 They're stable across devices, so records sync to a backend later without remapping.
 
 ### 9. Development builds for daily work, Expo Go for quick looks
-The share extension is native code, which Expo Go can't load, so the project now includes `expo-dev-client` and an EAS `development` profile. `npm start` targets development builds; `npm run start:go` still serves Expo Go, where every feature except "Share to Travyy" works. Native code that might be missing at runtime (the share inbox) is wrapped so the app degrades gracefully there.
+The share extension is native code, which Expo Go can't load, so the project now includes `expo-dev-client` and an EAS `development` profile. `npm start` targets development builds; `npm run start:go` still serves Expo Go, where everything except "Share to Travyy" and the map works. Native code that might be missing at runtime (the share inbox, the map) is wrapped so the app degrades gracefully there.
 
 ### 9a. "Share to Travyy": one entry point for every platform
 - **Library:** Expo's own `expo-sharing` (SDK 58), not a third-party share-intent package. Its config plugin generates the iOS share extension and the Android `SEND` intent filter (`text/plain`); both hand off by opening `<scheme>://expo-sharing`.
@@ -96,6 +100,13 @@ Screens ask `canSave(n)` / `canCreateTrip`; they never read `isPro` directly. Re
 
 ### 12. API server: zero-build TypeScript on Node 22
 Node 22.18+ strips TypeScript types natively, so `node src/index.ts` runs in production (see the Dockerfile) with no compile step. Requests are validated with zod, CORS is allow-listed via `ALLOWED_ORIGINS`, logs are structured JSON, and the server shuts down gracefully on SIGTERM. Rate limiting is in-memory (single instance); move it to Redis when scaling out.
+
+### 13. Free hosting first (Render), designed for its limits
+The API runs on Render's free web service, defined in `render.yaml` (Node runtime, so there's no Docker step; Node 22 runs the TypeScript directly).
+- **Sleeping server:** free services sleep after ~15 idle minutes and take 30–60 s to wake. The app pings `/health` on launch and on return to the foreground (`useWarmUpApi`), allows up to 90 s for server calls, and explains the wait in the UI after 8 s.
+- **Claude is optional and off in the free setup:** `/extract` answers 503 without credentials and the app extracts on-device, while `/caption` (Instagram) keeps working.
+- **Known risk:** Instagram blocks some cloud IP ranges more often than residential ones. When it does, Instagram shares fall back to pasting the caption.
+- **Move to paid hosting** (no sleep) when real users arrive. The server and app code don't change; only the plan does.
 
 ## Quality gates
 

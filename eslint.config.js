@@ -17,9 +17,12 @@ module.exports = defineConfig([
         {
           paths: [
             {
-              name: 'react-native-maps',
-              message:
-                'Use the cross-platform <Map> from @/shared/map (react-native-maps has no web support).',
+              name: '@maplibre/maplibre-react-native',
+              message: 'Use the cross-platform <Map> from @/shared/map (it handles web and Expo Go).',
+            },
+            {
+              name: 'maplibre-gl',
+              message: 'Use the cross-platform <Map> from @/shared/map (it handles web and Expo Go).',
             },
             {
               name: 'react-native',

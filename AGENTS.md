@@ -46,7 +46,7 @@ Read `docs/ARCHITECTURE.md` before structural changes. In short:
 
 - `src/app/` holds thin route files only; screens live in `src/features/<feature>/screens/`.
 - Import with the `@/` alias (`@/shared/ui`, `@/store`, `@/domain/models`).
-- Maps: use `<Map>` from `@/shared/map`, never `react-native-maps` directly (no web support).
+- Maps: use `<Map>` from `@/shared/map`, never MapLibre (`@maplibre/maplibre-react-native` / `maplibre-gl`) directly. It handles web, native and Expo Go.
 - Dialogs, sharing, haptics and links: use `@/shared/lib/platform` (RN `Alert`/`Share` are no-ops on web). ESLint enforces both rules.
 - Styles: `makeStyles((t) => ({…}))` with theme tokens; text through `<Text variant color>`. Support light and dark.
 - Data crossing a trust boundary (storage, network) is parsed with the zod schemas in `src/domain/models.ts`.

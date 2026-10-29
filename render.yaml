@@ -1,0 +1,27 @@
+# Render Blueprint: free hosting for the Travyy API (server/).
+# Render dashboard → New → Blueprint → select this repo → Apply.
+# Free web services sleep after ~15 min without traffic and take 30–60 s to wake;
+# the app wakes the server when it opens (src/shared/lib/useWarmUpApi.ts).
+services:
+  - type: web
+    name: travyy-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci --omit=dev
+    # Node 22.18+ runs TypeScript directly: no build step.
+    startCommand: node src/index.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: ALLOWED_ORIGINS
+        value: '*'
+      - key: INSTAGRAM_CAPTIONS
+        value: 'on'
+      - key: GEOCODER_USER_AGENT
+        value: 'Travyy/1.0 (replace with your contact email)'
+      # Optional and paid per use: Claude extraction. Leave unset for the free setup;
+      # places are then extracted on the phone. To enable, uncomment and set it in the dashboard.
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false

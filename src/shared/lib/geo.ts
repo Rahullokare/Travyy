@@ -29,34 +29,6 @@ export function centroid(points: LatLng[]): LatLng {
   return { lat: sum.lat / points.length, lng: sum.lng / points.length };
 }
 
-export interface Region {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-}
-
-/** A map region that fits every point with some padding. */
-export function regionFor(points: LatLng[], fallback: Region): Region {
-  if (points.length === 0) return fallback;
-  let minLat = Infinity,
-    maxLat = -Infinity,
-    minLng = Infinity,
-    maxLng = -Infinity;
-  for (const p of points) {
-    minLat = Math.min(minLat, p.lat);
-    maxLat = Math.max(maxLat, p.lat);
-    minLng = Math.min(minLng, p.lng);
-    maxLng = Math.max(maxLng, p.lng);
-  }
-  return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.4),
-    longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.4),
-  };
-}
-
 /**
  * Order stops into a short walking route: nearest-neighbour from `start`
  * (or the westernmost stop), then a 2-opt pass to untangle crossings.

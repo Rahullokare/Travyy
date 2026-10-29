@@ -21,7 +21,7 @@ export async function fetchServerCaption(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url }),
-      timeoutMs: 15_000,
+      timeoutMs: 75_000, // tolerates a free-tier cold start (≤60 s)
       signal,
     });
     if (!res.ok) return undefined;

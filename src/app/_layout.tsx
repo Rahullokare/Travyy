@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { logger } from '@/shared/lib/logger';
+import { useWarmUpApi } from '@/shared/lib/useWarmUpApi';
 import { queryClient } from '@/shared/query/queryClient';
 import { AppThemeProvider, useTheme } from '@/shared/theme';
 import { Button, EmptyState, Screen } from '@/shared/ui';
@@ -34,6 +35,7 @@ function RootNavigator() {
   const theme = useTheme();
   const hydrated = useSyncExternalStore(hydration.subscribe, hydration.isHydrated, hydration.isHydrated);
   const onboarded = useAppStore((s) => s.onboarded);
+  useWarmUpApi();
 
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync().catch(() => {});

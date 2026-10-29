@@ -73,7 +73,8 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url, text: caption }),
-          timeoutMs: 45_000,
+          // Cold start on free hosting (≤60 s) + AI extraction.
+          timeoutMs: 90_000,
           signal,
         }),
       );

@@ -85,17 +85,7 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
     extraction.mutate({ url: link || undefined, text: caption || undefined });
   };
 
-  if (extraction.isPending) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.bigEmoji}>🔎</Text>
-        <Text variant="heading">Finding the spots…</Text>
-        <Text variant="caption" align="center">
-          Reading the caption and pinning every place it mentions.
-        </Text>
-      </View>
-    );
-  }
+  if (extraction.isPending) return <FindingSpots />;
 
   if (extraction.isSuccess) {
     return (
@@ -163,6 +153,27 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
         <Button title="Find places" onPress={submit} />
       </ScreenScroll>
     </KeyboardAvoidingView>
+  );
+}
+
+/** Loading state. After a few seconds, explain the wait (a sleeping free-tier server takes up to a minute). */
+function FindingSpots() {
+  const styles = useStyles();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), 8_000);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <View style={styles.center}>
+      <Text style={styles.bigEmoji}>🔎</Text>
+      <Text variant="heading">Finding the spots…</Text>
+      <Text variant="caption" align="center">
+        {slow
+          ? 'Still working. The first lookup after a quiet spell can take up to a minute while our server wakes up.'
+          : 'Reading the caption and pinning every place it mentions.'}
+      </Text>
+    </View>
   );
 }
 
