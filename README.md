@@ -21,6 +21,10 @@ npm start
 
 Then press `w` for the web app, `a` for Android, `i` for the iOS simulator, or scan the QR code with **Expo Go**. On first launch, choose **"Start with sample spots"** to explore with Lisbon and Kyoto data.
 
+### Troubleshooting
+
+**`Unable to resolve "react-native-web/dist/index"`** (or any "Unable to resolve" error after pulling): your `node_modules` is older than the code. Run `npm install`. `npm start` / `npm run web` now check this for you and stop with a clear message. If it still fails, make sure you're on the latest code (`git pull`) in the folder you're running.
+
 ## Scripts
 
 | Command | What it does |
