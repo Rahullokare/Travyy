@@ -22,8 +22,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: v.name,
   slug: 'travyy',
-  // `travyy` always works for deep links (travyy://add?url=…); variant schemes avoid clashes between builds.
-  scheme: [v.scheme, 'travyy'].filter((s, i, all) => all.indexOf(s) === i),
+  // One scheme per variant so dev/preview/production builds don't steal each other's links.
+  // Must stay a single string: the expo-sharing extension opens `<scheme>://expo-sharing`.
+  scheme: v.scheme,
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -60,6 +61,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-web-browser',
     ['expo-location', { locationWhenInUsePermission: LOCATION_COPY }],
+    // "Share to Travyy" from Instagram, TikTok, YouTube, Google Maps or any browser.
+    // Needs a development/EAS build (share extensions can't run in Expo Go).
+    [
+      'expo-sharing',
+      {
+        ios: {
+          enabled: true,
+          appGroupId: `group.${v.id}`,
+          activationRule: { supportsText: true, supportsWebUrlWithMaxCount: 1 },
+        },
+        android: { enabled: true, singleShareMimeTypes: ['text/plain'] },
+      },
+    ],
     [
       'expo-splash-screen',
       {

@@ -250,7 +250,7 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           <Card style={styles.gap}>
             <Text>
               {result.platform === 'instagram'
-                ? 'Instagram hides captions from apps without a login. Open the reel, tap ••• → Copy caption (or copy the place names), and paste it here.'
+                ? 'Instagram doesn’t let apps read captions. Copy the caption — or just the place names — from the post and paste it here. Your link is kept.'
                 : 'We couldn’t spot a place name. Paste the caption, or type the place name and city.'}
             </Text>
             <Button title="Add caption or place name" variant="secondary" onPress={onRestart} />

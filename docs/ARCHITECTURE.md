@@ -61,8 +61,15 @@ There's no styling library to lock into. `makeStyles((theme) => ({…}))` create
 ### 8. IDs are UUIDs (`expo-crypto`)
 They're stable across devices, so records sync to a backend later without remapping.
 
-### 9. Expo Go now, development build soon
-Everything today runs in Expo Go, so anyone can open the app on a phone in seconds. The share extension (the #1 roadmap item) needs native code. When it lands, add `expo-dev-client` and an EAS `development` profile, and switch the team to development builds.
+### 9. Development builds for daily work, Expo Go for quick looks
+The share extension is native code, which Expo Go can't load, so the project now includes `expo-dev-client` and an EAS `development` profile. `npm start` targets development builds; `npm run start:go` still serves Expo Go, where every feature except "Share to Travyy" works. Native code that might be missing at runtime (the share inbox) is wrapped so the app degrades gracefully there.
+
+### 9a. "Share to Travyy": one entry point for every platform
+- **Library:** Expo's own `expo-sharing` (SDK 58), not a third-party share-intent package. Its config plugin generates the iOS share extension and the Android `SEND` intent filter (`text/plain`); both hand off by opening `<scheme>://expo-sharing`.
+- **One route:** `src/app/expo-sharing.tsx` reads what was shared (`readIncomingShare`, which has a `.web.ts` variant that reads Web Share Target query params). It turns the payload into `{ url, text }`, stripping share-sheet boilerplate and tracking params, then replaces itself with `/add`. The existing capture flow extracts from there, so native, web and deep links share one pipeline.
+- **Scheme must be a single string per variant** (`travyy-dev`, `travyy-preview`, `travyy`). The plugin writes it into the extension's Info.plist and Android strings; an array produces an invalid scheme and the extension crashes.
+- **Shares before onboarding** are held in an in-memory inbox and delivered from the tabs layout once onboarding is done. Pushing from the root layout lost the share: the protected-route switch resets navigation at that moment. The end-to-end test caught this.
+- **Caption sources:** TikTok and YouTube oEmbed, with TikTok short links resolved on native. Instagram exposes no caption without login, so the app keeps the link and asks for the caption. *Open decision:* reading Instagram captions server-side (e.g. from the public embed page) would remove that step, but it's unofficial and can break or conflict with Instagram's terms. Decide deliberately before building it.
 
 ### 10. Observability seams
 `logger` and typed `track()` analytics are the only places errors and events leave the app. Adding Sentry or PostHog means changing one function body; call sites stay the same. Analytics events are a typed union, so every event sends the properties the funnel in `RESEARCH.md` needs.

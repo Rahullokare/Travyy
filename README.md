@@ -19,7 +19,12 @@ npm install
 npm start
 ```
 
-Then press `w` for the web app, `a` for Android, `i` for the iOS simulator, or scan the QR code with **Expo Go**. On first launch, choose **"Start with sample spots"** to explore with Lisbon and Kyoto data.
+Then press `w` for the web app. On first launch, choose **"Start with sample spots"** to explore with Lisbon and Kyoto data.
+
+On a phone there are two options:
+
+- **Quick look (Expo Go):** run `npm run start:go` and scan the QR code with Expo Go. Everything works except "Share to Travyy", because Expo Go can't include share extensions.
+- **Full app (development build):** build once with EAS (below), install it on your phone, then `npm start` and scan the QR code with the Travyy (Dev) app. Rebuild only when native dependencies or `app.config.ts` change.
 
 ### Troubleshooting
 
@@ -29,7 +34,8 @@ Then press `w` for the web app, `a` for Android, `i` for the iOS simulator, or s
 
 | Command | What it does |
 |---|---|
-| `npm start` | Dev server (web, iOS, Android) |
+| `npm start` | Dev server for the web app and development builds |
+| `npm run start:go` | Dev server for Expo Go (no share extension) |
 | `npm run web` | Dev server, opening the web app |
 | `npm run build:web` | Production web build into `dist/` (static, deploy anywhere) |
 | `npm run check` | Typecheck + lint + format check + tests (what CI runs) |
@@ -39,7 +45,8 @@ Then press `w` for the web app, `a` for Android, `i` for the iOS simulator, or s
 
 ## Features
 
-- **Save from any link:** Instagram, TikTok, YouTube, Google Maps, or a pasted caption or place name, with a review step before anything is saved.
+- **Share to Travyy:** tap Share in Instagram, TikTok, YouTube, Google Maps or a browser and pick Travyy. The app opens straight into place extraction. Uses `expo-sharing`'s iOS share extension and Android share intent, plus a Web Share Target when the web app is installed. A share that arrives before onboarding is held and delivered right after.
+- **Save from any link:** paste an Instagram, TikTok, YouTube or Google Maps link, a caption, or a place name, with a review step before anything is saved.
 - **Map of everything you've saved:** category-coloured pins and city filters. On desktop and tablets you get a split list + map layout.
 - **Saves list:** grouped by city, with search, category filters, "hide visited" and "sort by nearest".
 - **Auto trip planner:** groups spots by neighbourhood into balanced days and orders each day as a walking route, then hands off to Google Maps.
@@ -82,17 +89,32 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8787 npm start
 
 ## Building and releasing
 
-EAS profiles are in `eas.json` (`preview` for internal testers, `production` for the stores):
+EAS profiles are in `eas.json`:
+
+| Profile | For | Install as |
+|---|---|---|
+| `development` | Day-to-day work with the dev server (includes the share extension) | Travyy (Dev) |
+| `preview` | Internal testers, release-mode build | Travyy (Preview) |
+| `production` | App Store / Play Store | Travyy |
 
 ```bash
-npx eas-cli@latest build --profile preview --platform all
+npx eas-cli@latest build --profile development --platform android
 ```
+
+iOS builds need an Apple Developer account. EAS registers the app group the share extension uses (`group.<bundle id>`) automatically.
+
+### Testing "Share to Travyy" on a phone
+
+1. Install a `development` (or `preview`) build. The share extension doesn't exist in Expo Go.
+2. In TikTok: Share → More (Android) or "…" (iOS) → **Travyy**. The app opens and finds the places from the caption.
+3. In Instagram: Share → **Travyy**. Instagram doesn't expose captions, so the app keeps the link and asks you to paste the caption or place names.
+4. iOS only: the first time, you may need to tap "More" in the share sheet and enable Travyy.
 
 The web app is a static SPA: `npm run build:web`, then deploy `dist/` to any static host (EAS Hosting, Vercel, Netlify, Cloudflare Pages).
 
 ## Roadmap (next)
 
-1. **Native share extension** (share straight from Instagram/TikTok). Needs a development build: add `expo-dev-client` and `expo-share-intent`, and route shared URLs to `/add?url=…`.
+1. **Instagram captions:** read reel captions server-side so Instagram shares work without pasting (see the decision in `docs/ARCHITECTURE.md`).
 2. **Billing:** RevenueCat behind `useEntitlements()` (the paywall UI is built; purchases are in demo mode).
 3. **Accounts and cloud sync** (Supabase), and with them a move from AsyncStorage to SQLite.
 4. **Crash reporting and analytics:** Sentry and PostHog behind the existing `logger`/`track` seams.

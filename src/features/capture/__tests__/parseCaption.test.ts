@@ -48,6 +48,8 @@ describe('guessCityFromHashtags', () => {
 describe('guessCategory', () => {
   it.each([
     ['Ichiran Ramen', 'food'],
+    ['Cervejaria Ramiro', 'food'],
+    ['Osteria Francescana', 'food'],
     ['Blue Bottle Coffee', 'cafe'],
     ['Fushimi Inari shrine', 'sight'],
     ['Bar High Five cocktails', 'nightlife'],

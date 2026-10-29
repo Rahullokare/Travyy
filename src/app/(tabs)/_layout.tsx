@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router/js-tabs';
 import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
+import { useDeliverPendingShare } from '@/features/capture/share/useDeliverPendingShare';
 import { useTheme } from '@/shared/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -14,6 +15,7 @@ function tabIcon(name: IconName) {
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  useDeliverPendingShare();
   return (
     <Tabs
       screenOptions={{

@@ -7,6 +7,23 @@ export function extractUrl(text: string): string | undefined {
   return m ? m[0].replace(/[).,!?]+$/, '') : undefined;
 }
 
+// Share links carry per-user tracking params; strip them so saves dedupe and look clean.
+const TRACKING_PARAMS =
+  /^(utm_\w+|igsh|igshid|si|fbclid|gclid|_r|_t|is_from_webapp|sender_device|share_\w+|feature)$/i;
+
+/** Remove tracking parameters while keeping the ones that identify content (e.g. YouTube `v`). */
+export function canonicalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (TRACKING_PARAMS.test(key)) parsed.searchParams.delete(key);
+    }
+    return parsed.toString().replace(/\?$/, '');
+  } catch {
+    return url;
+  }
+}
+
 export function detectPlatform(url: string): SourcePlatform {
   let host: string;
   try {

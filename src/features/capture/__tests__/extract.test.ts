@@ -75,6 +75,36 @@ describe('extractPlaces', () => {
     expect(result.candidates[0]).toMatchObject({ name: 'Ichiran', lat: 35.66 });
   });
 
+  it('still fetches the real caption when a share adds boilerplate text', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://www.tiktok.com/oembed')) {
+        return json({ title: 'Lisbon eats 🇵🇹\n📍 Cervejaria Ramiro, Lisbon #lisbon' });
+      }
+      if (url.includes('Ramiro'))
+        return json([{ lat: '38.7206', lon: '-9.1357', display_name: 'Cervejaria Ramiro' }]);
+      return json([]);
+    });
+    const result = await run(
+      extractPlaces({ url: 'https://www.tiktok.com/@lisbon.eats/video/123', text: 'Check out this video' }),
+    );
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('tiktok.com/oembed'))).toBe(true);
+    expect(result.candidates[0]).toMatchObject({ name: 'Cervejaria Ramiro', lat: 38.7206 });
+  });
+
+  it('falls back to searching the place name when a Maps short link cannot be resolved', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('maps.app.goo.gl')) throw new TypeError('Network request failed');
+      return json([{ lat: '38.7069', lon: '-9.1459', display_name: 'Time Out Market Lisboa, Lisbon' }]);
+    });
+    const result = await run(
+      extractPlaces({ url: 'https://maps.app.goo.gl/AbC123', text: 'Time Out Market Lisboa' }),
+    );
+    expect(result.engine).toBe('search');
+    expect(result.candidates[0]).toMatchObject({ name: 'Time Out Market Lisboa', lat: 38.7069 });
+  });
+
   it('returns no candidates when there is nothing to read', async () => {
     fetchMock.mockResolvedValue(new Response('', { status: 404 }));
     const result = await run(extractPlaces({ url: 'https://www.instagram.com/reel/abc/' }));

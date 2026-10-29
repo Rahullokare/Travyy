@@ -80,6 +80,8 @@ function RootNavigator() {
         <Stack.Protected guard={!onboarded}>
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         </Stack.Protected>
+        {/* Share-extension landing route: reachable before onboarding so first-launch shares aren't lost. */}
+        <Stack.Screen name="expo-sharing" options={{ headerShown: false, animation: 'none' }} />
       </Stack>
     </NavigationThemeProvider>
   );

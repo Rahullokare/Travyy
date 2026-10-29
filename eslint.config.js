@@ -28,6 +28,11 @@ module.exports = defineConfig([
                 'Use confirm/notify/shareText from @/shared/lib/platform (Alert and Share are no-ops on web).',
             },
             {
+              name: 'expo-sharing',
+              message:
+                'Read shares via readIncomingShare() in @/features/capture/share (handles Expo Go and web).',
+            },
+            {
               name: 'expo-haptics',
               message: 'Use haptics from @/shared/lib/platform (no-op on web).',
             },
@@ -38,7 +43,12 @@ module.exports = defineConfig([
   },
   {
     // The platform adapters themselves are allowed to use the raw APIs.
-    files: ['src/shared/map/**', 'src/shared/lib/platform.ts'],
+    files: [
+      'src/shared/map/**',
+      'src/shared/lib/platform.ts',
+      'src/features/capture/share/readIncomingShare.ts',
+      '**/__tests__/**',
+    ],
     rules: { 'no-restricted-imports': 'off' },
   },
 ]);

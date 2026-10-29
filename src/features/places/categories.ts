@@ -19,7 +19,7 @@ const KEYWORDS: [Category, RegExp][] = [
   ['nightlife', /\b(bar|pub|cocktails?|speakeasy|club|rooftop bar|wine bar|izakaya|brewery)\b/i],
   [
     'food',
-    /\b(restaurant|eat|eats|food|ramen|sushi|pizza|tacos?|burgers?|bistro|trattoria|street food|market hall|dumplings?|noodles?|bbq|diner|brasserie)\b/i,
+    /\b(restaurant|eat|eats|food|ramen|sushi|pizza|tacos?|burgers?|bistro|trattoria|street food|market hall|dumplings?|noodles?|bbq|diner|brasserie|tasca|cervejaria|marisqueira|ristorante|osteria|pizzeria|taqueria|churrascaria)\b/i,
   ],
   ['stay', /\b(hotel|hostel|resort|airbnb|villa|ryokan|guesthouse|stay)\b/i],
   [

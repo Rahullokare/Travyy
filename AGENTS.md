@@ -50,5 +50,7 @@ Read `docs/ARCHITECTURE.md` before structural changes. In short:
 - Dialogs, sharing, haptics and links: use `@/shared/lib/platform` (RN `Alert`/`Share` are no-ops on web). ESLint enforces both rules.
 - Styles: `makeStyles((t) => ({…}))` with theme tokens; text through `<Text variant color>`. Support light and dark.
 - Data crossing a trust boundary (storage, network) is parsed with the zod schemas in `src/domain/models.ts`.
-- `app.config.ts` is dynamic: `expo install` cannot add plugins to it, so add config plugins by hand.
+- `app.config.ts` is dynamic: `expo install` cannot add plugins to it, so add config plugins by hand. Keep `scheme` a single string (expo-sharing depends on it).
+- The project uses development builds (`expo-dev-client`); `npm run start:go` serves Expo Go, where the share extension is unavailable.
+- "Share to Travyy" lands on `src/app/expo-sharing.tsx` (path fixed by expo-sharing) and forwards to `/add`. Never call expo-sharing outside `src/features/capture/share/readIncomingShare.ts`.
 - Before declaring work done: `npm run check`, and `npx expo export --platform web --platform android --platform ios` when touching platform code.

@@ -9,6 +9,8 @@ import { parseCaption } from '../parseCaption';
 import { fetchCaption } from './captions';
 import { geocodeCandidates, reverseGeocode, searchPlaces } from './geocoding';
 
+const SHORT_TEXT = 200;
+
 export type ExtractionEngine = 'ai' | 'rules' | 'maps-link' | 'search';
 
 export interface ExtractionResult {
@@ -44,10 +46,24 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
   const platform: SourcePlatform = url ? detectPlatform(url) : 'manual';
 
   if (url && platform === 'google_maps') {
-    return { platform, sourceUrl: url, candidates: await fromMapsLink(url, signal), engine: 'maps-link' };
+    const candidates = await fromMapsLink(url, signal);
+    // Maps shares are "Place name\nhttps://maps.app.goo.gl/…": if the link can't be
+    // resolved (short links on web), the name alone is enough to search.
+    if (candidates.length === 0 && typed && typed.length <= 80) {
+      return {
+        platform,
+        sourceUrl: url,
+        candidates: await searchPlaces(typed, { limit: 5, signal }),
+        engine: 'search',
+      };
+    }
+    return { platform, sourceUrl: url, candidates, engine: 'maps-link' };
   }
 
-  const fetched = url && !typed ? await fetchCaption(url, platform, signal) : undefined;
+  // Short text next to a link (share-sheet boilerplate, a title) isn't the caption:
+  // still fetch the real one. A long pasted caption is used as-is.
+  const fetched =
+    url && (!typed || typed.length < SHORT_TEXT) ? await fetchCaption(url, platform, signal) : undefined;
   const caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
 
   if (env.apiUrl) {

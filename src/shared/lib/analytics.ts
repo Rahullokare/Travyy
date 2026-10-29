@@ -7,6 +7,7 @@ import type { SourcePlatform } from '@/domain/models';
  */
 export type AnalyticsEvent =
   | { name: 'onboarding_completed'; props: { withSamples: boolean } }
+  | { name: 'share_received'; props: { platform: SourcePlatform } }
   | { name: 'extraction_completed'; props: { platform: SourcePlatform; engine: string; found: number } }
   | { name: 'places_saved'; props: { count: number; platform: SourcePlatform } }
   | { name: 'trip_created'; props: { days: number; stops: number } }
