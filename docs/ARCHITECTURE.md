@@ -112,4 +112,6 @@ The API runs on Render's free web service, defined in `render.yaml` (Node runtim
 
 `npm run check` = typecheck + ESLint + Prettier + Jest. CI (`.github/workflows/ci.yml`) runs that **and bundles web, Android and iOS** on every push, so platform-resolution errors like the original web failure are caught before anyone runs the app.
 
+**One toolchain everywhere:** local, CI and EAS all install with `npm ci` from the same lockfile. EAS builds pin Node 22.22.0 (a `base` profile in `eas.json`), which ships npm 10.9, the version that writes the committed lockfile. `.npmrc` turns on `engine-strict` and `package.json` excludes npm 11.6.1–11.6.2: those versions silently drop `@emnapi/*` from the lockfile, which broke the first EAS build.
+
 Tests live next to the code in `__tests__/`: pure logic (parser, link parsing, planner, geo), the store (dedupe, trip cleanup, persisted-state validation), the extraction pipeline with mocked network, and components via React Native Testing Library.

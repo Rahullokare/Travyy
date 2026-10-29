@@ -30,6 +30,8 @@ On a phone there are two options:
 
 **`Unable to resolve "react-native-web/dist/index"`** (or any "Unable to resolve" error after pulling): your `node_modules` is older than the code. Run `npm install`. `npm start` / `npm run web` now check this for you and stop with a clear message. If it still fails, make sure you're on the latest code (`git pull`) in the folder you're running.
 
+**EAS build fails at "Install dependencies" with `Missing: @emnapi/core@… from lock file`:** your `package-lock.json` was rewritten by npm 11.6.1 or 11.6.2, which have a bug that drops packages from it. EAS uploads your local files, so the broken lockfile went with it. Update npm (`npm install -g npm@11`), restore the lockfile (`git checkout -- package-lock.json`), then run `npm install` again. The repo now refuses those two npm versions (`.npmrc` + `engines`), so this can't happen silently again.
+
 ## Scripts
 
 | Command | What it does |
