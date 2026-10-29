@@ -69,7 +69,24 @@ The share extension is native code, which Expo Go can't load, so the project now
 - **One route:** `src/app/expo-sharing.tsx` reads what was shared (`readIncomingShare`, which has a `.web.ts` variant that reads Web Share Target query params). It turns the payload into `{ url, text }`, stripping share-sheet boilerplate and tracking params, then replaces itself with `/add`. The existing capture flow extracts from there, so native, web and deep links share one pipeline.
 - **Scheme must be a single string per variant** (`travyy-dev`, `travyy-preview`, `travyy`). The plugin writes it into the extension's Info.plist and Android strings; an array produces an invalid scheme and the extension crashes.
 - **Shares before onboarding** are held in an in-memory inbox and delivered from the tabs layout once onboarding is done. Pushing from the root layout lost the share: the protected-route switch resets navigation at that moment. The end-to-end test caught this.
-- **Caption sources:** TikTok and YouTube oEmbed, with TikTok short links resolved on native. Instagram exposes no caption without login, so the app keeps the link and asks for the caption. *Open decision:* reading Instagram captions server-side (e.g. from the public embed page) would remove that step, but it's unofficial and can break or conflict with Instagram's terms. Decide deliberately before building it.
+- **Caption sources:** TikTok and YouTube oEmbed, with TikTok short links resolved on native. Instagram is read by the server (9b). If the server can't read it, the app keeps the link and asks for the caption.
+
+### 9b. Instagram captions from the embed page (server-side)
+*Decided 2026-10-29, at the product owner's request, knowing the trade-offs below.*
+
+Instagram has no public caption API, and post pages require login. The embed page (`/p/<shortcode>/embed/captioned/`), which Instagram serves so public posts can be embedded on other sites, includes the caption. `server/src/instagram.ts` reads it.
+
+- **Risks accepted:** it's unofficial. It can break without notice when Instagram changes the page, and automated access may conflict with Instagram's terms.
+- **Guardrails:**
+  - public posts only, with no login or cookies
+  - 24h cache, plus a 30-min negative cache for failures
+  - outbound requests serialised with a gap and an 8s timeout
+  - `INSTAGRAM_CAPTIONS=off` turns it off instantly
+  - caption text is never logged
+- **Resilient parsing:** three strategies, tried in order: embedded JSON (including JSON nested in strings), the rendered caption block, then description meta. Fixture tests cover each.
+- **Monitoring:** each lookup logs `caption_lookup` with the strategy that matched (`source`). A drift from `embed-json` to `embed-html`, or to `null`, is the early warning that the format changed.
+- **Server-only by design:** browsers can't fetch it (CORS), and doing it from millions of phones would look like abuse and couldn't be switched off. The app calls `POST /caption` when AI extraction is unavailable, so Instagram works even without Claude.
+- **If it breaks for good:** fall back to the paste flow (already in place). Then consider the official Instagram Graph API's oEmbed (needs a Meta app review), or understanding the video itself (transcription and on-screen text).
 
 ### 10. Observability seams
 `logger` and typed `track()` analytics are the only places errors and events leave the app. Adding Sentry or PostHog means changing one function body; call sites stay the same. Analytics events are a typed union, so every event sends the properties the funnel in `RESEARCH.md` needs.

@@ -28,7 +28,7 @@ jobs:
         run: npx expo export --platform web --platform android --platform ios --output-dir dist
 
   server:
-    name: API server (typecheck)
+    name: API server (typecheck · test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -42,3 +42,4 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test

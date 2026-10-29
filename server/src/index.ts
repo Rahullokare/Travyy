@@ -7,13 +7,20 @@ import { fetchCaption, geocode } from './sources.ts';
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY_BYTES = 32 * 1024;
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR ?? 60);
+/** Without Claude credentials the server still serves /caption; /extract answers 503 and the app falls back. */
+const AI_ENABLED = !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 /** Comma-separated web origins allowed to call the API. Native apps send no Origin and are unaffected. */
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '*').split(',').map((s) => s.trim());
 
+const HttpUrl = z.url({ protocol: /^https?$/ });
 const ExtractRequest = z.object({
-  url: z.url({ protocol: /^https?$/ }).optional(),
+  url: HttpUrl.optional(),
   text: z.string().max(8000).optional(),
 });
+const CaptionRequest = z.object({ url: HttpUrl });
+
+/** Text this short next to a link is share-sheet boilerplate or a title, not the caption. */
+const SHORT_TEXT = 200;
 
 function log(level: 'info' | 'warn' | 'error', msg: string, fields: Record<string, unknown> = {}) {
   console[level](JSON.stringify({ level, msg, time: new Date().toISOString(), ...fields }));
@@ -65,27 +72,63 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 }
 
-async function handleExtract(req: IncomingMessage, res: ServerResponse) {
-  const ip =
+function clientIp(req: IncomingMessage): string {
+  return (
     (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
     req.socket.remoteAddress ??
-    'unknown';
-  if (rateLimited(ip)) return send(req, res, 429, { error: 'Too many requests, try again later.' });
+    'unknown'
+  );
+}
 
+/** Rate-limit, read and validate a JSON body. Sends the error response itself and returns undefined on failure. */
+async function readRequest<T>(req: IncomingMessage, res: ServerResponse, schema: z.ZodType<T>) {
+  if (rateLimited(clientIp(req))) {
+    send(req, res, 429, { error: 'Too many requests, try again later.' });
+    return undefined;
+  }
   let raw: unknown;
   try {
     raw = await readJson(req);
   } catch {
-    return send(req, res, 400, { error: 'Invalid JSON body' });
+    send(req, res, 400, { error: 'Invalid JSON body' });
+    return undefined;
   }
-  const parsed = ExtractRequest.safeParse(raw);
-  if (!parsed.success) return send(req, res, 400, { error: z.prettifyError(parsed.error) });
-  const { url, text } = parsed.data;
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    send(req, res, 400, { error: z.prettifyError(parsed.error) });
+    return undefined;
+  }
+  return parsed.data;
+}
 
-  const caption = [text, url && !text ? await fetchCaption(url) : undefined]
-    .filter(Boolean)
-    .join('\n')
-    .trim();
+/** Fetch the post's caption and log where it came from (never the caption itself). */
+async function lookupCaption(url: string) {
+  const started = Date.now();
+  const found = await fetchCaption(url);
+  log(found ? 'info' : 'warn', 'caption_lookup', {
+    host: new URL(url).hostname,
+    source: found?.source ?? null,
+    chars: found?.text.length ?? 0,
+    ms: Date.now() - started,
+  });
+  return found;
+}
+
+async function handleCaption(req: IncomingMessage, res: ServerResponse) {
+  const body = await readRequest(req, res, CaptionRequest);
+  if (!body) return;
+  const found = await lookupCaption(body.url);
+  return send(req, res, 200, { caption: found?.text ?? null, source: found?.source ?? null });
+}
+
+async function handleExtract(req: IncomingMessage, res: ServerResponse) {
+  if (!AI_ENABLED) return send(req, res, 503, { error: 'AI extraction is not configured on this server' });
+  const body = await readRequest(req, res, ExtractRequest);
+  if (!body) return;
+  const { url, text } = body;
+
+  const fetched = url && (!text || text.length < SHORT_TEXT) ? await lookupCaption(url) : undefined;
+  const caption = [text, fetched?.text].filter(Boolean).join('\n').trim();
   if (!caption) return send(req, res, 200, { caption: null, places: [] });
 
   const started = Date.now();
@@ -130,10 +173,17 @@ const server = createServer((req, res) => {
   }
   if (req.method === 'GET' && req.url === '/health') return send(req, res, 200, { ok: true });
   if (req.method === 'POST' && req.url === '/extract') return void handleExtract(req, res);
+  if (req.method === 'POST' && req.url === '/caption') return void handleCaption(req, res);
   return send(req, res, 404, { error: 'not found' });
 });
 
-server.listen(PORT, () => log('info', 'listening', { port: PORT }));
+server.listen(PORT, () =>
+  log('info', 'listening', {
+    port: PORT,
+    aiExtraction: AI_ENABLED,
+    instagramCaptions: (process.env.INSTAGRAM_CAPTIONS ?? 'on').toLowerCase() !== 'off',
+  }),
+);
 
 // Let in-flight requests finish when the platform stops the container.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

@@ -6,7 +6,7 @@ import { fetchJson } from '@/shared/lib/http';
 import { logger } from '@/shared/lib/logger';
 import { detectPlatform, extractUrl, parseGoogleMapsUrl } from '../links';
 import { parseCaption } from '../parseCaption';
-import { fetchCaption } from './captions';
+import { fetchCaption, fetchServerCaption } from './captions';
 import { geocodeCandidates, reverseGeocode, searchPlaces } from './geocoding';
 
 const SHORT_TEXT = 200;
@@ -62,9 +62,9 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
 
   // Short text next to a link (share-sheet boilerplate, a title) isn't the caption:
   // still fetch the real one. A long pasted caption is used as-is.
-  const fetched =
-    url && (!typed || typed.length < SHORT_TEXT) ? await fetchCaption(url, platform, signal) : undefined;
-  const caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
+  const wantsCaption = !!url && (!typed || typed.length < SHORT_TEXT);
+  const fetched = wantsCaption ? await fetchCaption(url, platform, signal) : undefined;
+  let caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
 
   if (env.apiUrl) {
     try {
@@ -87,6 +87,12 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
     } catch (error) {
       if (signal?.aborted) throw error;
       logger.warn('AI extraction failed; falling back to on-device rules', { error: String(error) });
+    }
+    // The device couldn't read the caption (Instagram, or any link on web): the server
+    // can, even when AI extraction is unavailable. Then the on-device rules take over.
+    if (wantsCaption && !fetched) {
+      const serverCaption = await fetchServerCaption(env.apiUrl, url!, signal);
+      if (serverCaption) caption = [typed, serverCaption].filter(Boolean).join('\n').trim();
     }
   }
 

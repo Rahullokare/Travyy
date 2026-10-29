@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { CATEGORIES, CATEGORY_META } from '@/features/places/categories';
 import { useEntitlements } from '@/features/paywall/entitlements';
 import type { Candidate } from '@/domain/models';
+import { env } from '@/shared/config/env';
 import { track } from '@/shared/lib/analytics';
 import { haptics } from '@/shared/lib/platform';
 import { makeStyles } from '@/shared/theme';
@@ -250,7 +251,9 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           <Card style={styles.gap}>
             <Text>
               {result.platform === 'instagram'
-                ? 'Instagram doesn’t let apps read captions. Copy the caption — or just the place names — from the post and paste it here. Your link is kept.'
+                ? env.apiUrl
+                  ? 'We couldn’t read this post’s caption. It may be private, or Instagram blocked the request. Copy the caption, or just the place names, and paste it here. Your link is kept.'
+                  : 'Instagram doesn’t let apps read captions. Copy the caption, or just the place names, from the post and paste it here. Your link is kept.'
                 : 'We couldn’t spot a place name. Paste the caption, or type the place name and city.'}
             </Text>
             <Button title="Add caption or place name" variant="secondary" onPress={onRestart} />

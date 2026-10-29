@@ -4,11 +4,38 @@ import type { SourcePlatform } from '@/domain/models';
 import { fetchWithTimeout } from '@/shared/lib/http';
 
 const OEmbedSchema = z.object({ title: z.string().optional() });
+/** Contract of POST /caption on the Travyy API (server/src/index.ts). */
+const ServerCaptionSchema = z.object({ caption: z.string().nullable() });
+
+/**
+ * Ask the Travyy API for a post's caption. The server can read captions the device
+ * can't: Instagram (via its embed page) and any link from the web app (no CORS limits).
+ */
+export async function fetchServerCaption(
+  apiUrl: string,
+  url: string,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
+  try {
+    const res = await fetchWithTimeout(`${apiUrl}/caption`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      timeoutMs: 15_000,
+      signal,
+    });
+    if (!res.ok) return undefined;
+    return ServerCaptionSchema.parse(await res.json()).caption?.trim() || undefined;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return undefined;
+  }
+}
 
 /**
  * Best-effort public caption lookup (oEmbed, then Open Graph tags).
  * Instagram requires login and browsers block most cross-origin HTML, so this
- * often returns undefined — the UI then asks the user to paste the caption.
+ * often returns undefined; the server (`fetchServerCaption`) covers those cases.
  */
 export async function fetchCaption(
   url: string,

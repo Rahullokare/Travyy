@@ -1,3 +1,5 @@
+import { decodeHtmlEntities, fetchInstagramCaption, isInstagramUrl } from './instagram.ts';
+
 const USER_AGENT = process.env.GEOCODER_USER_AGENT ?? 'Travyy/1.0 (contact: set GEOCODER_USER_AGENT)';
 
 async function get(url: string, ms = 10_000): Promise<Response> {
@@ -8,17 +10,25 @@ async function get(url: string, ms = 10_000): Promise<Response> {
   });
 }
 
-/** Public caption lookup: oEmbed where available, Open Graph tags otherwise. */
-export async function fetchCaption(url: string): Promise<string | undefined> {
+export type CaptionLookup = { text: string; source: string };
+
+/**
+ * Public caption lookup: oEmbed for TikTok/YouTube, the embed page for Instagram
+ * (see instagram.ts), Open Graph tags for anything else.
+ */
+export async function fetchCaption(url: string): Promise<CaptionLookup | undefined> {
   try {
+    if (isInstagramUrl(url)) return await fetchInstagramCaption(url);
     const host = new URL(url).hostname;
-    if (host.endsWith('tiktok.com')) {
-      const r = await get(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
-      if (r.ok) return ((await r.json()) as { title?: string }).title;
-    }
-    if (host.endsWith('youtube.com') || host === 'youtu.be') {
-      const r = await get(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`);
-      if (r.ok) return ((await r.json()) as { title?: string }).title;
+    const oembed = host.endsWith('tiktok.com')
+      ? ['tiktok-oembed', `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`]
+      : host.endsWith('youtube.com') || host === 'youtu.be'
+        ? ['youtube-oembed', `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`]
+        : undefined;
+    if (oembed) {
+      const r = await get(oembed[1]);
+      const title = r.ok ? ((await r.json()) as { title?: string }).title?.trim() : undefined;
+      if (title) return { text: title, source: oembed[0] };
     }
     const r = await get(url);
     if (!r.ok) return undefined;
@@ -27,10 +37,11 @@ export async function fetchCaption(url: string): Promise<string | undefined> {
       html.match(
         new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'),
       )?.[1];
-    return (
-      [meta('og:title'), meta('og:description') ?? meta('description')].filter(Boolean).join('\n') ||
-      undefined
-    );
+    const text = [meta('og:title'), meta('og:description') ?? meta('description')]
+      .filter(Boolean)
+      .map((t) => decodeHtmlEntities(t!))
+      .join('\n');
+    return text ? { text, source: 'open-graph' } : undefined;
   } catch {
     return undefined;
   }
