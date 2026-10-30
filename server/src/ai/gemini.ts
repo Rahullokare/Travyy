@@ -34,6 +34,9 @@ const RESPONSE_SCHEMA = {
   required: ['places'],
 };
 
+/** One frame every 2 s: enough to read on-screen names, at half the frames of the default (1 fps). */
+const VIDEO_SAMPLING = { fps: 0.5 };
+
 export function geminiExtractor(): PlaceExtractor | undefined {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return undefined;
@@ -45,26 +48,30 @@ export function geminiExtractor(): PlaceExtractor | undefined {
       const parts: object[] = [{ text: userPrompt(input) }];
       if (input.image) parts.unshift({ inlineData: input.image });
       if (input.video) {
-        parts.unshift(
-          'youtubeUrl' in input.video
+        parts.unshift({
+          ...('youtubeUrl' in input.video
             ? { fileData: { fileUri: input.video.youtubeUrl } }
-            : { inlineData: input.video },
-        );
+            : { inlineData: input.video }),
+          videoMetadata: VIDEO_SAMPLING,
+        });
       }
       const r = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          // Gemini watches the whole video before answering.
-          signal: AbortSignal.timeout(input.video ? 75_000 : 30_000),
+          // Watching takes longer. Kept short enough that the cover fallback still fits in the app's 90 s.
+          signal: AbortSignal.timeout(input.video ? 45_000 : 30_000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SYSTEM }] },
             contents: [{ role: 'user', parts }],
+            // No temperature: Gemini 3 models are tuned for the default, and lower values can make them loop.
             generationConfig: {
-              temperature: 0.2,
               responseMimeType: 'application/json',
               responseSchema: RESPONSE_SCHEMA,
+              // Picking names out of a post needs little reasoning; the default (medium) is much slower.
+              thinkingConfig: { thinkingLevel: 'LOW' },
+              ...(input.video && { mediaResolution: 'MEDIA_RESOLUTION_LOW' }),
             },
           }),
         },
