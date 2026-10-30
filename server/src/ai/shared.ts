@@ -17,6 +17,10 @@ export const ExtractionSchema = z.object({
   places: z.array(
     z.object({
       name: z.string().describe('Official venue or landmark name, without emojis or hashtags'),
+      localName: z
+        .string()
+        .nullable()
+        .describe('The name in the local language, as on signs and maps, when it differs from name'),
       city: z.string().nullable(),
       country: z.string().nullable(),
       category: z.enum(CATEGORIES),
@@ -32,6 +36,7 @@ export const SYSTEM = `You extract real-world places from social media travel po
 Return every specific, visitable place the post recommends or shows: restaurants, cafés, bars, hotels, viewpoints, beaches, museums, shops, trails, landmarks.
 - Use the venue's proper name as a local would search for it on a map ("Cervejaria Ramiro", not "the seafood place").
 - Venue @handles usually name the venue: "@cafe_kitsune_tokyo" -> "Café Kitsuné".
+- When the name you give is a translation (often English), also give the local-language name in localName ("25 de Abril Bridge" -> "Ponte 25 de Abril"); maps only know the local one.
 - Infer city and country from context (hashtags, the title, other places) when not stated per place.
 - Skip creators' own handles, generic areas used only as hashtags, brands that are not a location, and calls to action.
 - Score confidence lower when the name is ambiguous or you are guessing from a handle.

@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { z } from 'zod';
 import { AiBusyError, configuredExtractors, extractFromPost } from './extract.ts';
 import { isTrustedMediaHost, youtubeWatchUrl } from './media.ts';
-import { fetchCaption, geocode } from './sources.ts';
+import { fetchCaption, geocodePlace } from './sources.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY_BYTES = 32 * 1024;
@@ -26,6 +26,8 @@ const CaptionRequest = z.object({ url: HttpUrl });
 
 /** Text this short next to a link is share-sheet boilerplate or a title, not the caption. */
 const SHORT_TEXT = 200;
+/** After this long geocoding one post, places get one search each, to stay inside the app's 90 s. */
+const GEOCODE_RETRY_BUDGET_MS = 20_000;
 
 function log(level: 'info' | 'warn' | 'error', msg: string, fields: Record<string, unknown> = {}) {
   console[level](JSON.stringify({ level, msg, time: new Date().toISOString(), ...fields }));
@@ -154,8 +156,10 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
     } = await extractFromPost(EXTRACTORS, { caption, url, imageUrl, videoUrl });
     for (const f of failures) log('warn', 'ai_provider_failed', f);
     const places = [];
+    const geocodeStarted = Date.now();
     for (const p of extracted.slice(0, 15)) {
-      const hit = await geocode([p.name, p.city, p.country].filter(Boolean).join(', '));
+      // Nominatim allows 1 request/s, so second searches stop once geocoding has taken a while.
+      const hit = await geocodePlace(p, { retry: Date.now() - geocodeStarted < GEOCODE_RETRY_BUDGET_MS });
       places.push({
         name: p.name,
         city: p.city ?? hit?.city ?? undefined,

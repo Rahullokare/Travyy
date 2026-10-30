@@ -121,3 +121,38 @@ export async function geocode(query: string): Promise<GeoHit | undefined> {
     return undefined;
   }
 }
+
+export interface PlaceName {
+  name: string;
+  localName?: string | null;
+  city?: string | null;
+  country?: string | null;
+}
+
+/**
+ * The map searches to try for a place, best first. OpenStreetMap mostly knows places by their
+ * local name, so an English name ("25 de Abril Bridge") often misses where the local one hits.
+ */
+export function placeQueries({ name, localName, city, country }: PlaceName): string[] {
+  const where = (n: string) => [n, city, country].filter(Boolean).join(', ');
+  const queries = [where(name)];
+  if (localName?.trim() && localName.trim().toLowerCase() !== name.trim().toLowerCase())
+    queries.push(where(localName.trim()));
+  return queries;
+}
+
+/** Geocode a place by its name, then by its local name. `retry: false` makes only the first search. */
+export async function geocodePlace(
+  place: PlaceName,
+  {
+    retry = true,
+    lookup = geocode,
+  }: { retry?: boolean; lookup?: (q: string) => Promise<GeoHit | undefined> } = {},
+): Promise<GeoHit | undefined> {
+  const queries = placeQueries(place);
+  for (const q of retry ? queries : queries.slice(0, 1)) {
+    const hit = await lookup(q);
+    if (hit) return hit;
+  }
+  return undefined;
+}

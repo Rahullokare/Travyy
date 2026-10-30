@@ -19,6 +19,7 @@ import type { ImageData, VideoData } from './media.ts';
 
 const RAMIRO: ExtractedPlace = {
   name: 'Cervejaria Ramiro',
+  localName: null,
   city: 'Lisbon',
   country: 'Portugal',
   category: 'food',
