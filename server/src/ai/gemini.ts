@@ -40,15 +40,24 @@ export function geminiExtractor(): PlaceExtractor | undefined {
   return {
     name: 'gemini',
     vision: true,
+    video: true,
     async extract(input) {
       const parts: object[] = [{ text: userPrompt(input) }];
       if (input.image) parts.unshift({ inlineData: input.image });
+      if (input.video) {
+        parts.unshift(
+          'youtubeUrl' in input.video
+            ? { fileData: { fileUri: input.video.youtubeUrl } }
+            : { inlineData: input.video },
+        );
+      }
       const r = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-          signal: AbortSignal.timeout(30_000),
+          // Gemini watches the whole video before answering.
+          signal: AbortSignal.timeout(input.video ? 75_000 : 30_000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SYSTEM }] },
             contents: [{ role: 'user', parts }],

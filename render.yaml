@@ -19,6 +19,8 @@ services:
         value: '*'
       - key: INSTAGRAM_CAPTIONS
         value: 'on'
+      - key: VIDEO_EXTRACTION
+        value: 'on'
       - key: GEOCODER_USER_AGENT
         value: 'Travyy/1.0 (replace with your contact email)'
       # AI extraction. Gemini and Groq have free tiers: set their keys in the dashboard

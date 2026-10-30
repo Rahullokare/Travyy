@@ -13,8 +13,9 @@ import {
   configuredExtractors,
   extractFromPost,
   extractPlaces,
+  type MediaLoaders,
 } from './extract.ts';
-import type { ImageData } from './images.ts';
+import type { ImageData, VideoData } from './media.ts';
 
 const RAMIRO: ExtractedPlace = {
   name: 'Cervejaria Ramiro',
@@ -33,10 +34,12 @@ function fake(
   name: string,
   result: ExtractedPlace[] | Error | ((input: ExtractionInput) => ExtractedPlace[]),
   vision = true,
+  video = false,
 ): Fake {
   return {
     name,
     vision,
+    video,
     inputs: [],
     async extract(input) {
       this.inputs.push(input);
@@ -111,46 +114,63 @@ describe('extractPlaces', () => {
 });
 
 describe('extractFromPost', () => {
-  const loader = (image: ImageData | undefined) => {
+  const CLIP: VideoData = { mimeType: 'video/mp4', data: 'dmlkZW8=' };
+  const REEL_VIDEO = 'https://scontent.cdninstagram.com/v/reel.mp4';
+  const SHORT = 'https://www.youtube.com/shorts/dQw4w9WgXcQ';
+
+  function loaders(
+    image: ImageData | undefined,
+    video: VideoData | undefined = undefined,
+    videoEnabled = true,
+  ) {
     const calls: string[] = [];
-    const load = async (url: string) => {
-      calls.push(url);
-      return image;
+    const media: MediaLoaders = {
+      image: async (url) => (calls.push(url), image),
+      video: async (url) => (calls.push(url), video),
+      videoEnabled,
     };
-    return { calls, load };
-  };
+    return { calls, media };
+  }
 
   it('sends a weak caption together with the cover image', async () => {
     const gemini = fake('gemini', [RAMIRO]);
-    const { calls, load } = loader(IMAGE);
-    const result = await extractFromPost([gemini], { caption: 'Lisbon 🇵🇹', imageUrl: COVER }, load);
+    const { calls, media } = loaders(IMAGE);
+    const result = await extractFromPost([gemini], { caption: 'Lisbon 🇵🇹', imageUrl: COVER }, media);
     assert.deepEqual(calls, [COVER]);
     assert.equal(gemini.inputs.length, 1);
     assert.equal(gemini.inputs[0].image, IMAGE);
-    assert.equal(result.usedImage, true);
+    assert.equal(result.media, 'image');
   });
 
   it('works from the image alone when there is no caption', async () => {
     const gemini = fake('gemini', [RAMIRO]);
-    const result = await extractFromPost([gemini], { caption: '', imageUrl: COVER }, loader(IMAGE).load);
+    const result = await extractFromPost([gemini], { caption: '', imageUrl: COVER }, loaders(IMAGE).media);
     assert.deepEqual(result.places, [RAMIRO]);
     assert.equal(gemini.inputs[0].caption, '');
   });
 
-  it('returns nothing without asking the AI when there is neither caption nor a readable image', async () => {
-    const gemini = fake('gemini', [RAMIRO]);
-    const result = await extractFromPost([gemini], { caption: '', imageUrl: COVER }, loader(undefined).load);
+  it('returns nothing without asking the AI when there is neither caption nor readable media', async () => {
+    const gemini = fake('gemini', [RAMIRO], true, true);
+    const result = await extractFromPost(
+      [gemini],
+      { caption: '', imageUrl: COVER, videoUrl: REEL_VIDEO },
+      loaders(undefined).media,
+    );
     assert.deepEqual(result.places, []);
     assert.equal(gemini.inputs.length, 0);
   });
 
-  it('does not download the image for a full caption that finds places', async () => {
+  it('does not download media for a full caption that finds places', async () => {
     assert.ok(LONG_CAPTION.length >= WEAK_CAPTION);
-    const gemini = fake('gemini', [RAMIRO]);
-    const { calls, load } = loader(IMAGE);
-    const result = await extractFromPost([gemini], { caption: LONG_CAPTION, imageUrl: COVER }, load);
+    const gemini = fake('gemini', [RAMIRO], true, true);
+    const { calls, media } = loaders(IMAGE, CLIP);
+    const result = await extractFromPost(
+      [gemini],
+      { caption: LONG_CAPTION, imageUrl: COVER, videoUrl: REEL_VIDEO },
+      media,
+    );
     assert.deepEqual(calls, []);
-    assert.equal(result.usedImage, false);
+    assert.equal(result.media, 'none');
   });
 
   it('retries a full caption with the image when the text alone finds nothing', async () => {
@@ -158,18 +178,81 @@ describe('extractFromPost', () => {
     const result = await extractFromPost(
       [gemini],
       { caption: LONG_CAPTION, imageUrl: COVER },
-      loader(IMAGE).load,
+      loaders(IMAGE).media,
     );
     assert.equal(gemini.inputs.length, 2);
     assert.deepEqual(result.places, [RAMIRO]);
-    assert.equal(result.usedImage, true);
+    assert.equal(result.media, 'image');
+  });
+
+  it('keeps the text-only answer when a full caption finds nothing and there is no media', async () => {
+    const gemini = fake('gemini', []);
+    const result = await extractFromPost([gemini], { caption: LONG_CAPTION }, loaders(undefined).media);
+    assert.equal(gemini.inputs.length, 1);
+    assert.equal(result.provider, 'gemini');
   });
 
   it('skips the image when no configured provider can read it', async () => {
     const groq = fake('groq', [RAMIRO], false);
-    const { calls, load } = loader(IMAGE);
-    await extractFromPost([groq], { caption: 'Lisbon', imageUrl: COVER }, load);
+    const { calls, media } = loaders(IMAGE);
+    await extractFromPost([groq], { caption: 'Lisbon', imageUrl: COVER }, media);
     assert.deepEqual(calls, []);
+  });
+
+  it('lets a video provider watch a YouTube link directly, before the cover', async () => {
+    const gemini = fake('gemini', [RAMIRO], true, true);
+    const groq = fake('groq', [], false);
+    const { calls, media } = loaders(IMAGE);
+    const result = await extractFromPost(
+      [groq, gemini],
+      { caption: 'Lisbon in 60 seconds', url: SHORT, imageUrl: COVER },
+      media,
+    );
+    assert.deepEqual(gemini.inputs[0].video, { youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' });
+    assert.equal(groq.inputs.length, 0);
+    assert.deepEqual(calls, []);
+    assert.equal(result.media, 'video');
+    assert.deepEqual(result.places, [RAMIRO]);
+  });
+
+  it('downloads a reel clip and sends it to the video provider', async () => {
+    const gemini = fake('gemini', [RAMIRO], true, true);
+    const { calls, media } = loaders(IMAGE, CLIP);
+    const result = await extractFromPost(
+      [gemini],
+      { caption: '', videoUrl: REEL_VIDEO, imageUrl: COVER },
+      media,
+    );
+    assert.deepEqual(calls, [REEL_VIDEO]);
+    assert.equal(gemini.inputs[0].video, CLIP);
+    assert.equal(result.media, 'video');
+  });
+
+  it('falls back to the cover when watching the video fails', async () => {
+    const gemini = fake(
+      'gemini',
+      (input) => {
+        if (input.video) throw new ProviderError('gemini: HTTP 400');
+        return [RAMIRO];
+      },
+      true,
+      true,
+    );
+    const result = await extractFromPost(
+      [gemini],
+      { caption: 'Lisbon', url: SHORT, imageUrl: COVER },
+      loaders(IMAGE).media,
+    );
+    assert.equal(result.media, 'image');
+    assert.deepEqual(result.places, [RAMIRO]);
+    assert.equal(result.failures.length, 1);
+    assert.match(result.failures[0].message, /HTTP 400/);
+  });
+
+  it('never sends video when video extraction is switched off', async () => {
+    const gemini = fake('gemini', [RAMIRO], true, true);
+    await extractFromPost([gemini], { caption: 'Lisbon', url: SHORT }, loaders(undefined, CLIP, false).media);
+    assert.equal(gemini.inputs[0].video, undefined);
   });
 });
 

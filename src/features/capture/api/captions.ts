@@ -6,10 +6,11 @@ import { readInstagramPost } from './instagram';
 
 const OEmbedSchema = z.object({ title: z.string().optional(), thumbnail_url: z.string().optional() });
 
-/** What the device found for a post: its caption and cover image (sent to the API for AI extraction). */
+/** What the device found for a post: its caption, cover image and reel video (sent to the API for AI extraction). */
 export interface CaptionLookup {
   text?: string;
   imageUrl?: string;
+  videoUrl?: string;
 }
 /** Contract of POST /caption on the Travyy API (server/src/index.ts). */
 const ServerCaptionSchema = z.object({ caption: z.string().nullable() });

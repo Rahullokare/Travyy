@@ -9,6 +9,7 @@ export function claudeExtractor(): PlaceExtractor | undefined {
   return {
     name: 'claude',
     vision: true,
+    video: false,
     async extract(input) {
       const content: Anthropic.Beta.BetaContentBlockParam[] = [{ type: 'text', text: userPrompt(input) }];
       if (input.image) {

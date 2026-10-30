@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { AiBusyError, configuredExtractors, extractFromPost } from './extract.ts';
-import { isTrustedImageHost } from './images.ts';
+import { isTrustedMediaHost, youtubeWatchUrl } from './media.ts';
 import { fetchCaption, geocode } from './sources.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -19,6 +19,8 @@ const ExtractRequest = z.object({
   text: z.string().max(8000).optional(),
   /** The post's cover image, when the phone read it (Instagram blocks the server). Instagram/TikTok/YouTube CDNs only. */
   imageUrl: HttpUrl.optional(),
+  /** The reel's video file, when the phone read it. Same CDN hosts only. */
+  videoUrl: HttpUrl.optional(),
 });
 const CaptionRequest = z.object({ url: HttpUrl });
 
@@ -113,6 +115,7 @@ async function lookupCaption(url: string) {
     source: found.source,
     chars: found.text?.length ?? 0,
     image: !!found.imageUrl,
+    video: !!found.videoUrl,
     ms: Date.now() - started,
     ...found.detail,
   });
@@ -134,9 +137,12 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
 
   const fetched = url && (!text || text.length < SHORT_TEXT) ? await lookupCaption(url) : undefined;
   const caption = [text, fetched?.text].filter(Boolean).join('\n').trim();
-  const sentImage = body.imageUrl && isTrustedImageHost(body.imageUrl) ? body.imageUrl : undefined;
-  const imageUrl = sentImage ?? fetched?.imageUrl;
-  if (!caption && !imageUrl) return send(req, res, 200, { caption: null, places: [] });
+  const trusted = (u: string | undefined) => (u && isTrustedMediaHost(u) ? u : undefined);
+  const imageUrl = trusted(body.imageUrl) ?? fetched?.imageUrl;
+  const videoUrl = trusted(body.videoUrl) ?? trusted(fetched?.videoUrl);
+  const youtube = url ? youtubeWatchUrl(url) : undefined;
+  if (!caption && !imageUrl && !videoUrl && !youtube)
+    return send(req, res, 200, { caption: null, places: [] });
 
   const started = Date.now();
   try {
@@ -144,8 +150,8 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
       places: extracted,
       provider,
       failures,
-      usedImage,
-    } = await extractFromPost(EXTRACTORS, { caption, url, imageUrl });
+      media,
+    } = await extractFromPost(EXTRACTORS, { caption, url, imageUrl, videoUrl });
     for (const f of failures) log('warn', 'ai_provider_failed', f);
     const places = [];
     for (const p of extracted.slice(0, 15)) {
@@ -163,7 +169,7 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
     }
     log('info', 'extract', {
       provider,
-      usedImage,
+      media,
       found: places.length,
       located: places.filter((p) => p.lat).length,
       ms: Date.now() - started,

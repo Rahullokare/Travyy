@@ -1,5 +1,5 @@
 /**
- * Reading a caption (plus cover image and location tag) from Instagram's embed page — shared by the API (`instagram.ts`) and the
+ * Reading a caption (plus cover image, video and location tag) from Instagram's embed page — shared by the API (`instagram.ts`) and the
  * app (`src/features/capture/api/instagram.ts`), so both request and parse it the same way.
  *
  * Pure functions with no imports and no Node or React Native APIs: both TypeScript projects
@@ -171,6 +171,17 @@ export function imageFromEmbedPage(html: string): string | undefined {
   if (src?.startsWith('https://')) return decodeHtmlEntities(src);
   const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
   return og?.startsWith('https://') ? decodeHtmlEntities(og) : undefined;
+}
+
+/** A reel's video file (MP4 on Instagram's CDN), when the page includes it. Only the post JSON carries it. */
+export function videoFromEmbedPage(html: string): string | undefined {
+  const unescapedOnce = html.replace(/\\(["\\/])/g, '$1');
+  for (const source of [html, unescapedOnce]) {
+    const body = source.match(/"video_url"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1];
+    const url = body !== undefined ? decodeJsonString(body) : undefined;
+    if (url?.startsWith('https://')) return url;
+  }
+  return undefined;
 }
 
 /** The post's location tag ("Cervejaria Ramiro"), when the creator added one. Only the post JSON carries it. */

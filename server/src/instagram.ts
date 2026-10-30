@@ -22,6 +22,7 @@ import {
   isShareLink,
   locationFromEmbedPage,
   parseEmbedPage,
+  videoFromEmbedPage,
   type EmbedFailure,
   type InstagramCaption,
 } from './instagramEmbed.ts';
@@ -41,8 +42,9 @@ export type LookupOutcome =
 
 export interface InstagramLookup {
   caption?: InstagramCaption;
-  /** Cover image and location tag, found even when the post has no caption. */
+  /** Cover image, reel video and location tag, found even when the post has no caption. */
   imageUrl?: string;
+  videoUrl?: string;
   location?: string;
   outcome: LookupOutcome;
   /** HTTP status and page size of the embed request, when one was made. */
@@ -124,6 +126,7 @@ async function fetchEmbed(shortcode: string, fetcher: Fetcher): Promise<Instagra
     return {
       caption,
       imageUrl: imageFromEmbedPage(html),
+      videoUrl: videoFromEmbedPage(html),
       location: locationFromEmbedPage(html),
       outcome: caption ? 'ok' : diagnoseEmbedPage(html, res.url),
       status: res.status,

@@ -75,8 +75,13 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
           await fetchJson(`${env.apiUrl}/extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // The cover lets the AI read place names shown on it when the caption is weak.
-            body: JSON.stringify({ url, text: caption, imageUrl: fetched?.imageUrl }),
+            // Cover and reel video let the AI read place names shown on screen when the caption is weak.
+            body: JSON.stringify({
+              url,
+              text: caption,
+              imageUrl: fetched?.imageUrl,
+              videoUrl: fetched?.videoUrl,
+            }),
             // Cold start on free hosting (≤60 s) + AI extraction.
             timeoutMs: 90_000,
             signal,

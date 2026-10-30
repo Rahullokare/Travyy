@@ -20,6 +20,7 @@ export function groqExtractor(): PlaceExtractor | undefined {
   return {
     name: 'groq',
     vision: false,
+    video: false,
     async extract(input) {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',

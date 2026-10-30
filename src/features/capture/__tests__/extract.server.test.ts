@@ -58,8 +58,8 @@ describe('extractPlaces with the Travyy API', () => {
     expect(result.candidates[0].name).toBe('Cervejaria Ramiro');
   });
 
-  it('sends the cover image and location tag the phone read to /extract', async () => {
-    const embed = `<script>{"shortcode_media":{"display_url":"https:\\/\\/scontent.cdninstagram.com\\/v\\/cover.jpg","location":{"id":"1","name":"Cervejaria Ramiro"},"edge_media_to_caption":{"edges":[{"node":{"text":"Best seafood in town"}}]}}}</script>`;
+  it('sends the cover image, reel video and location tag the phone read to /extract', async () => {
+    const embed = `<script>{"shortcode_media":{"display_url":"https:\\/\\/scontent.cdninstagram.com\\/v\\/cover.jpg","video_url":"https:\\/\\/scontent.cdninstagram.com\\/v\\/reel.mp4","location":{"id":"1","name":"Cervejaria Ramiro"},"edge_media_to_caption":{"edges":[{"node":{"text":"Best seafood in town"}}]}}}</script>`;
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.endsWith('/embed/captioned/')) return new Response(embed);
@@ -68,6 +68,7 @@ describe('extractPlaces with the Travyy API', () => {
           url: REEL,
           text: 'Best seafood in town\n\n📍 Cervejaria Ramiro',
           imageUrl: 'https://scontent.cdninstagram.com/v/cover.jpg',
+          videoUrl: 'https://scontent.cdninstagram.com/v/reel.mp4',
         });
         return json({ caption: 'Best seafood in town', places: [] });
       }

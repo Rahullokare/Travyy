@@ -10,6 +10,7 @@ import {
   instagramShortcode,
   locationFromEmbedPage,
   parseEmbedPage,
+  videoFromEmbedPage,
   withLocationTag,
 } from './instagramEmbed.ts';
 
@@ -103,7 +104,7 @@ describe('caption parsing strategies', () => {
 });
 
 // A reel with no caption: only the cover image and the creator's location tag.
-const MEDIA_JSON_EMBED = `<script>window.__additionalDataLoaded('extra',{"shortcode_media":{"id":"2","display_url":"https:\\/\\/scontent-lis1-1.cdninstagram.com\\/v\\/cover.jpg?stp=dst\\u0026_nc_ht=x","location":{"id":"123","has_public_page":true,"name":"Cervejaria Ramiro","slug":"cervejaria-ramiro"},"edge_media_to_caption":{"edges":[]}}});</script>`;
+const MEDIA_JSON_EMBED = `<script>window.__additionalDataLoaded('extra',{"shortcode_media":{"id":"2","display_url":"https:\\/\\/scontent-lis1-1.cdninstagram.com\\/v\\/cover.jpg?stp=dst\\u0026_nc_ht=x","is_video":true,"video_url":"https:\\/\\/scontent-lis1-1.cdninstagram.com\\/o1\\/v\\/reel.mp4?efg=x\\u0026_nc_ht=y","location":{"id":"123","has_public_page":true,"name":"Cervejaria Ramiro","slug":"cervejaria-ramiro"},"edge_media_to_caption":{"edges":[]}}});</script>`;
 
 const MEDIA_HTML_EMBED = `<div class="Embed"><div class="EmbeddedMedia"><img class="EmbeddedMediaImage" alt="" src="https://scontent.cdninstagram.com/v/cover.jpg?a=1&amp;b=2" /></div></div>`;
 
@@ -122,6 +123,14 @@ describe('cover image and location tag', () => {
       'https://scontent.cdninstagram.com/og.jpg',
     );
     assert.equal(imageFromEmbedPage(NO_CAPTION_EMBED), undefined);
+  });
+
+  it('reads the reel video from post JSON', () => {
+    assert.equal(
+      videoFromEmbedPage(MEDIA_JSON_EMBED),
+      'https://scontent-lis1-1.cdninstagram.com/o1/v/reel.mp4?efg=x&_nc_ht=y',
+    );
+    assert.equal(videoFromEmbedPage(JSON_EMBED), undefined);
   });
 
   it('reads the location tag from post JSON', () => {
@@ -188,6 +197,7 @@ describe('fetchInstagramCaption', () => {
     assert.deepEqual(result, {
       caption: undefined,
       imageUrl: undefined,
+      videoUrl: undefined,
       location: undefined,
       outcome: 'no_post_data',
       status: 200,

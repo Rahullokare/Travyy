@@ -7,7 +7,7 @@ import {
   type ExtractionInput,
   type PlaceExtractor,
 } from './ai/shared.ts';
-import { fetchImage, type ImageData } from './images.ts';
+import { fetchImage, fetchVideo, youtubeWatchUrl, type ImageData, type VideoData } from './media.ts';
 
 export type { ExtractedPlace, ExtractionInput, PlaceExtractor } from './ai/shared.ts';
 
@@ -67,36 +67,76 @@ export async function extractPlaces(
   throw busy ? new AiBusyError(summary) : new Error(summary);
 }
 
-/** Below this length a caption rarely names its places (a title, a hook line), so the cover image is worth sending. */
+/** Below this length a caption rarely names its places (a title, a hook line), so the cover or video is worth sending. */
 export const WEAK_CAPTION = 200;
+
+/** Kill switch for video extraction (YouTube links and Instagram reel clips). */
+const VIDEO_ENABLED = (process.env.VIDEO_EXTRACTION ?? 'on').toLowerCase() !== 'off';
 
 export interface PostInput {
   caption: string;
   url?: string;
   imageUrl?: string;
+  /** A clip to download (Instagram reels, read by the phone). YouTube links in `url` are watched directly. */
+  videoUrl?: string;
 }
 
+export type MediaUsed = 'none' | 'image' | 'video';
+
+export interface MediaLoaders {
+  image: (url: string) => Promise<ImageData | undefined>;
+  video: (url: string) => Promise<VideoData | undefined>;
+  videoEnabled: boolean;
+}
+
+const DEFAULT_LOADERS: MediaLoaders = { image: fetchImage, video: fetchVideo, videoEnabled: VIDEO_ENABLED };
+
 /**
- * Extract places from a post, adding its cover image only when it's likely to help, so free
- * image quota isn't spent on captions that already list their places: a weak caption is sent
- * with the image; a full caption is sent alone, and again with the image if it finds nothing.
+ * Extract places from a post, adding media only when it's likely to help, so free quota isn't
+ * spent on captions that already list their places:
+ *  - a full caption is tried alone first;
+ *  - then the video (a YouTube link, or a clip), on providers that watch video; a failure here
+ *    is logged and the next step runs, so video can never make extraction worse;
+ *  - then the cover image, with the whole chain.
  */
 export async function extractFromPost(
   extractors: PlaceExtractor[],
-  { caption, url, imageUrl }: PostInput,
-  loadImage: (url: string) => Promise<ImageData | undefined> = fetchImage,
-): Promise<ExtractionResult & { usedImage: boolean }> {
-  const image = async () => (imageUrl && extractors.some((e) => e.vision) ? loadImage(imageUrl) : undefined);
+  { caption, url, imageUrl, videoUrl }: PostInput,
+  loaders: MediaLoaders = DEFAULT_LOADERS,
+): Promise<ExtractionResult & { media: MediaUsed }> {
+  const failures: ExtractionResult['failures'] = [];
+  const done = (result: ExtractionResult, media: MediaUsed) => ({
+    ...result,
+    failures: [...failures, ...result.failures],
+    media,
+  });
 
-  if (caption.length < WEAK_CAPTION) {
-    const cover = await image();
-    if (!caption && !cover) return { places: [], provider: 'none', failures: [], usedImage: false };
-    return { ...(await extractPlaces(extractors, { caption, url, image: cover })), usedImage: !!cover };
+  // A full caption that found nothing: kept as the answer if no media helps.
+  let textOnly: ExtractionResult | undefined;
+  if (caption.length >= WEAK_CAPTION) {
+    const first = await extractPlaces(extractors, { caption, url });
+    if (first.places.length > 0) return done(first, 'none');
+    failures.push(...first.failures);
+    textOnly = { ...first, failures: [] };
   }
-  const first = await extractPlaces(extractors, { caption, url });
-  if (first.places.length > 0) return { ...first, usedImage: false };
-  const cover = await image();
-  if (!cover) return { ...first, usedImage: false };
-  const second = await extractPlaces(extractors, { caption, url, image: cover });
-  return { ...second, failures: [...first.failures, ...second.failures], usedImage: true };
+
+  const watchers = loaders.videoEnabled ? extractors.filter((e) => e.video) : [];
+  if (watchers.length) {
+    const youtubeUrl = url ? youtubeWatchUrl(url) : undefined;
+    const video = youtubeUrl ? { youtubeUrl } : videoUrl ? await loaders.video(videoUrl) : undefined;
+    if (video) {
+      try {
+        // The provider watched it: trust that answer, even an empty one.
+        return done(await extractPlaces(watchers, { caption, url, video }), 'video');
+      } catch (e) {
+        failures.push({ provider: 'video', message: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  }
+
+  const cover = imageUrl && extractors.some((e) => e.vision) ? await loaders.image(imageUrl) : undefined;
+  if (cover) return done(await extractPlaces(extractors, { caption, url, image: cover }), 'image');
+  if (textOnly) return done(textOnly, 'none');
+  if (!caption) return done({ places: [], provider: 'none', failures: [] }, 'none');
+  return done(await extractPlaces(extractors, { caption, url }), 'none');
 }

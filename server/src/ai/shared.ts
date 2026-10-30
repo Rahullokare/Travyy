@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ImageData } from '../images.ts';
+import type { ImageData, VideoData } from '../media.ts';
 
 export const CATEGORIES = [
   'food',
@@ -36,20 +36,23 @@ Return every specific, visitable place the post recommends or shows: restaurants
 - Skip creators' own handles, generic areas used only as hashtags, brands that are not a location, and calls to action.
 - Score confidence lower when the name is ambiguous or you are guessing from a handle.
 - When the post's cover image is attached, also read place names written on it (text overlays, signs, pins). Name a place from the scenery alone only for an unmistakable landmark.
+- When the post's video is attached, also use place names spoken in it or shown on screen (text overlays, signs, menus, map pins). Name a place from the scenery alone only for an unmistakable landmark.
 If the post mentions no specific places, return an empty list.`;
 
-/** What a provider gets: the post's text and, when the text is weak, its cover image. */
+/** What a provider gets: the post's text and, when the text is weak, its cover image or video. */
 export interface ExtractionInput {
   caption: string;
   url?: string;
   image?: ImageData;
+  video?: VideoData;
 }
 
-export function userPrompt({ caption, url, image }: ExtractionInput): string {
+export function userPrompt({ caption, url, image, video }: ExtractionInput): string {
   return [
     url && `Post URL: ${url}`,
     caption ? `Post text:\n"""\n${caption}\n"""` : 'The post has no text.',
     image && "The post's cover image is attached.",
+    video && "The post's video is attached.",
   ]
     .filter(Boolean)
     .join('\n');
@@ -60,6 +63,8 @@ export interface PlaceExtractor {
   name: string;
   /** Reads images. A text-only provider gets the caption alone, and is skipped when there is none. */
   vision: boolean;
+  /** Watches video (YouTube links and short clips). Only video requests go to these. */
+  video: boolean;
   extract(input: ExtractionInput): Promise<ExtractedPlace[]>;
 }
 

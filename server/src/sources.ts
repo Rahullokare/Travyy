@@ -15,6 +15,8 @@ export interface CaptionLookup {
   text?: string;
   /** The post's cover image or thumbnail, for AI extraction when the caption is weak. */
   imageUrl?: string;
+  /** An Instagram reel's video file, for AI extraction when the caption is weak. */
+  videoUrl?: string;
   source: string | null;
   /** Extra `caption_lookup` log fields: outcome, HTTP status, page size. Never caption text. */
   detail?: Record<string, string | number | boolean | undefined>;
@@ -28,9 +30,15 @@ export interface CaptionLookup {
 export async function fetchCaption(url: string): Promise<CaptionLookup> {
   try {
     if (isInstagramUrl(url)) {
-      const { caption, imageUrl, location, ...detail } = await fetchInstagramCaption(url);
+      const { caption, imageUrl, videoUrl, location, ...detail } = await fetchInstagramCaption(url);
       const text = withLocationTag(caption?.text, location);
-      return { text, imageUrl, source: caption?.source ?? (location ? 'embed-location' : null), detail };
+      return {
+        text,
+        imageUrl,
+        videoUrl,
+        source: caption?.source ?? (location ? 'embed-location' : null),
+        detail,
+      };
     }
     const host = new URL(url).hostname;
     const oembed = host.endsWith('tiktok.com')

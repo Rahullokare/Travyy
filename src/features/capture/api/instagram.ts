@@ -12,14 +12,15 @@ import {
   isShareLink,
   locationFromEmbedPage,
   parseEmbedPage,
+  videoFromEmbedPage,
   withLocationTag,
 } from '../../../../server/src/instagramEmbed';
 import type { CaptionLookup } from './captions';
 
 /**
- * Read a public Instagram post's caption, cover image and location tag from its embed page,
+ * Read a public Instagram post's caption, cover image, reel video and location tag from its embed page,
  * on the phone. The location tag is added to the caption as a "📍 Name" line; the cover goes
- * to the API, which often can't load the page itself.
+ * and video go to the API, which often can't load the page itself.
  *
  * Instagram often refuses this request from cloud servers (our API on Render got pages
  * without the post in the first device test), but serves it to phones: one request, made
@@ -56,6 +57,7 @@ export async function readInstagramPost(url: string, signal?: AbortSignal): Prom
     return {
       text: withLocationTag(found?.text, locationFromEmbedPage(html)),
       imageUrl: imageFromEmbedPage(html),
+      videoUrl: videoFromEmbedPage(html),
     };
   } catch (error) {
     if (signal?.aborted) throw error;
