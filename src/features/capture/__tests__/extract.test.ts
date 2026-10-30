@@ -66,6 +66,75 @@ describe('extractPlaces', () => {
     expect(missing!.confidence).toBeLessThan(0.5);
   });
 
+  it('prefers the island over a business named after it, and takes its category from OSM', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = decodeURIComponent(String(input));
+      // What Nominatim returns: nothing is named "Koh Mak"; the island is "Ko Mak".
+      if (url.includes('q=Koh Mak'))
+        return json([
+          {
+            lat: '11.82',
+            lon: '102.47',
+            display_name: 'Koh Mak BuriHut, Ko Kut District',
+            category: 'highway',
+            type: 'footway',
+            importance: 0.04,
+          },
+          {
+            lat: '11.81',
+            lon: '102.48',
+            display_name: 'Koh Mak Divers, Ko Kut District',
+            category: 'amenity',
+            type: 'dive_centre',
+            importance: 0,
+          },
+        ]);
+      if (url.includes('q=Ko Mak'))
+        return json([
+          {
+            lat: '11.8',
+            lon: '102.48',
+            display_name: 'Ko Mak, Trat Province, Thailand',
+            category: 'boundary',
+            type: 'administrative',
+            addresstype: 'island',
+            importance: 0.24,
+          },
+          {
+            lat: '11.9',
+            lon: '102.5',
+            display_name: 'Ko Mak Resort, Trat Province, Thailand',
+            category: 'tourism',
+            type: 'hotel',
+            importance: 0.3,
+          },
+        ]);
+      if (url.includes('q=Koh Kood'))
+        return json([
+          {
+            lat: '11.65',
+            lon: '102.56',
+            display_name: 'Ko Kut, Trat Province',
+            category: 'place',
+            type: 'island',
+            importance: 0.29,
+          },
+        ]);
+      return json([]);
+    });
+    const result = await run(
+      extractPlaces({ text: '📍 Koh Mak: tiny and laid-back\n📍 Koh Kood: food options are limited' }),
+    );
+    expect(result.candidates.find((c) => c.name === 'Koh Mak')).toMatchObject({
+      address: 'Ko Mak, Trat Province, Thailand',
+      category: 'nature',
+    });
+    expect(result.candidates.find((c) => c.name === 'Koh Kood')).toMatchObject({
+      lat: 11.65,
+      category: 'nature',
+    });
+  });
+
   it('treats a short bare name as a place search', async () => {
     fetchMock.mockResolvedValue(
       json([{ lat: '35.66', lon: '139.70', display_name: 'Ichiran, Shibuya, Tokyo' }]),

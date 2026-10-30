@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { z } from 'zod';
-import type { Candidate, LatLng } from '@/domain/models';
+import type { Candidate, Category, LatLng } from '@/domain/models';
 import { guessCategory } from '@/features/places/categories';
 import { fetchWithTimeout } from '@/shared/lib/http';
 
@@ -20,6 +20,8 @@ const HitSchema = z.object({
   display_name: z.string(),
   type: z.string().optional(),
   category: z.string().optional(),
+  addresstype: z.string().optional(),
+  importance: z.coerce.number().optional(),
   address: z
     .object({
       city: z.string().optional(),
@@ -55,15 +57,40 @@ function toCandidate(hit: Hit, confidence: number): Candidate {
     address: hit.display_name,
     city: cityOf(hit.address),
     country: hit.address?.country,
-    category: guessCategory(`${hit.display_name} ${hit.type ?? ''} ${hit.category ?? ''}`),
+    category:
+      categoryFromOsm(hit) ?? guessCategory(`${hit.display_name} ${hit.type ?? ''} ${hit.category ?? ''}`),
     confidence,
   };
 }
 
-export async function searchPlaces(
+const NATURE_TYPES =
+  /^(island|islet|archipelago|national_park|nature_reserve|protected_area|beach|bay|peak|volcano|waterfall|park|garden|wood|cliff|cave_entrance)$/;
+const SETTLEMENT_TYPES =
+  /^(city|town|village|hamlet|suburb|quarter|neighbourhood|municipality|province|state|region|county|district|administrative)$/;
+
+/** Category from OSM tags, when they say what the place is (an island is nature whatever the caption says next to it). */
+export function categoryFromOsm(hit: Pick<Hit, 'category' | 'type' | 'addresstype'>): Category | undefined {
+  const { category: cls, type } = hit;
+  if (!cls || !type) return undefined;
+  // An island is often tagged boundary/administrative, with `addresstype: island`.
+  if (cls === 'natural' || NATURE_TYPES.test(type) || NATURE_TYPES.test(hit.addresstype ?? ''))
+    return 'nature';
+  if ((cls === 'place' || cls === 'boundary') && SETTLEMENT_TYPES.test(type)) return 'other';
+  if (/^(restaurant|fast_food|food_court)$/.test(type)) return 'food';
+  if (type === 'cafe') return 'cafe';
+  if (/^(bar|pub|nightclub|biergarten)$/.test(type)) return 'nightlife';
+  if (cls === 'tourism' && /^(hotel|hostel|guest_house|motel|chalet|apartment|camp_site)$/.test(type))
+    return 'stay';
+  if (/^(museum|attraction|viewpoint|place_of_worship|castle|monument|memorial|gallery|artwork)$/.test(type))
+    return 'sight';
+  if (cls === 'shop') return 'shopping';
+  return undefined;
+}
+
+async function searchHits(
   query: string,
   options: { near?: LatLng; limit?: number; signal?: AbortSignal } = {},
-): Promise<Candidate[]> {
+): Promise<Hit[]> {
   const { near, limit = 8, signal } = options;
   const viewbox = near
     ? `&viewbox=${near.lng - 0.3},${near.lat + 0.3},${near.lng + 0.3},${near.lat - 0.3}`
@@ -72,11 +99,68 @@ export async function searchPlaces(
     `/search?format=jsonv2&addressdetails=1&limit=${limit}${viewbox}&q=${encodeURIComponent(query)}`,
     signal,
   );
-  return z
-    .array(HitSchema)
-    .catch([])
-    .parse(json)
-    .map((h) => toCandidate(h, 0.9));
+  return z.array(HitSchema).catch([]).parse(json);
+}
+
+export async function searchPlaces(
+  query: string,
+  options: { near?: LatLng; limit?: number; signal?: AbortSignal } = {},
+): Promise<Candidate[]> {
+  return (await searchHits(query, options)).map((h) => toCandidate(h, 0.9));
+}
+
+// Thai romanisation varies ("Koh Mak" in captions, "Ko Mak" in OSM), and islands are a staple of travel reels.
+const normalizeName = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/\bkoh\b/g, 'ko')
+    .replace(/\s+/g, ' ')
+    .trim();
+const hitName = (hit: Hit) => hit.display_name.split(',')[0];
+const isArea = (hit: Hit) =>
+  hit.category === 'place' || hit.category === 'boundary' || hit.category === 'natural';
+
+/**
+ * Best of a few geocoder hits for a caption name. Nominatim's first hit is often a business
+ * that merely contains the name ("Koh Mak BuriHut" for the island Koh Mak), so prefer an exact
+ * name match, then a whole area over a venue, and never a road.
+ */
+export function pickBestHit(hits: Hit[], name: string): Hit | undefined {
+  const wanted = normalizeName(name);
+  const score = (hit: Hit) => {
+    const same = normalizeName(hitName(hit)) === wanted;
+    return (
+      (hit.importance ?? 0) +
+      (same ? 1 : 0) +
+      (same && isArea(hit) ? 1 : 0) -
+      (hit.category === 'highway' ? 2 : 0)
+    );
+  };
+  let best: Hit | undefined;
+  for (const hit of hits) if (!best || score(hit) > score(best)) best = hit;
+  return best;
+}
+
+/** "Koh Mak" ↔ "Ko Mak": the spelling OSM may use instead. */
+function spellingVariants(name: string): string[] {
+  if (/\bKoh\b/i.test(name)) return [name.replace(/\bKoh\b/gi, 'Ko')];
+  if (/\bKo\b/i.test(name)) return [name.replace(/\bKo\b/gi, 'Koh')];
+  return [];
+}
+
+async function geocodeName(
+  name: string,
+  context: (string | undefined)[],
+  signal?: AbortSignal,
+): Promise<Hit | undefined> {
+  const query = (n: string) => [n, ...context].filter(Boolean).join(', ');
+  const best = pickBestHit(await searchHits(query(name), { limit: 5, signal }), name);
+  if (best && (isArea(best) || normalizeName(hitName(best)) === normalizeName(name))) return best;
+  for (const variant of spellingVariants(name)) {
+    const alt = pickBestHit(await searchHits(query(variant), { limit: 5, signal }), variant);
+    if (alt && isArea(alt)) return alt;
+  }
+  return best;
 }
 
 export async function reverseGeocode(point: LatLng, signal?: AbortSignal) {
@@ -101,17 +185,19 @@ export async function geocodeCandidates(
       out.push(c);
       continue;
     }
-    const query = [c.name, c.city ?? options.cityHint, c.country].filter(Boolean).join(', ');
     try {
-      const [hit] = await searchPlaces(query, { limit: 1, signal: options.signal });
+      const hit = await geocodeName(c.name, [c.city ?? options.cityHint, c.country], options.signal);
       if (hit) {
+        const found = toCandidate(hit, c.confidence);
         out.push({
           ...c,
-          lat: hit.lat,
-          lng: hit.lng,
-          address: hit.address,
-          city: c.city ?? hit.city ?? options.cityHint,
-          country: c.country ?? hit.country,
+          lat: found.lat,
+          lng: found.lng,
+          address: found.address,
+          city: c.city ?? found.city ?? options.cityHint,
+          country: c.country ?? found.country,
+          // A name that says what it is ("Railay Beach") wins; otherwise trust OSM over the caption text around it.
+          category: guessCategory(c.name) === 'other' ? (categoryFromOsm(hit) ?? c.category) : c.category,
         });
         continue;
       }

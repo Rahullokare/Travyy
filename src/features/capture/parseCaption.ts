@@ -24,7 +24,11 @@ export function parseCaption(caption: string): { candidates: Candidate[]; cityHi
       existing.city ??= city;
       return;
     }
-    found.set(key, { name, city, category: guessCategory(`${name} ${context}`), confidence });
+    // The name decides when it says what the place is; the text around it is only a hint, since
+    // reviews mention food, stays and beaches in one breath ("Koh Kood: … food options are limited").
+    const fromName = guessCategory(name);
+    const category = fromName === 'other' ? guessCategory(context) : fromName;
+    found.set(key, { name, city, category, confidence });
   };
 
   for (const line of text.split('\n')) {

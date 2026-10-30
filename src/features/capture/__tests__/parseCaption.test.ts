@@ -3,6 +3,17 @@ import { guessCategory } from '@/features/places/categories';
 import { guessCityFromHashtags, parseCaption } from '@/features/capture/parseCaption';
 
 describe('parseCaption', () => {
+  it('takes the category from the name, not the review text around it', () => {
+    const caption = `After 11 years across Thailand, here's my honest review 🇹🇭
+📍 Koh Kood: 8.5/10 A proper hidden gem. Food options are limited so eat local or at your hotel
+📍 Koh Chang: 7/10 Can feel a bit chaotic depending on where you stay
+📍 Railay Beach: 9/10 Best food in Krabi`;
+    const byName = Object.fromEntries(parseCaption(caption).candidates.map((c) => [c.name, c.category]));
+    expect(byName['Railay Beach']).toBe('nature');
+    // No hint in the name: the text is the fallback until the geocoder says what the place is.
+    expect(byName['Koh Kood']).toBe('food');
+  });
+
   it('extracts pinned, numbered and labelled places', () => {
     const caption = `5 spots you NEED in Lisbon 🇵🇹
 1. Time Out Market - go hungry
