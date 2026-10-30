@@ -1,63 +1,56 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import { z } from 'zod';
+import { claudeExtractor } from './ai/claude.ts';
+import { geminiExtractor } from './ai/gemini.ts';
+import { groqExtractor } from './ai/groq.ts';
+import { ProviderError, type ExtractedPlace, type PlaceExtractor } from './ai/shared.ts';
 
-const CATEGORIES = [
-  'food',
-  'cafe',
-  'nightlife',
-  'sight',
-  'nature',
-  'stay',
-  'shopping',
-  'activity',
-  'other',
-] as const;
+export type { ExtractedPlace, PlaceExtractor } from './ai/shared.ts';
 
-const ExtractionSchema = z.object({
-  places: z.array(
-    z.object({
-      name: z.string().describe('Official venue or landmark name, without emojis or hashtags'),
-      city: z.string().nullable(),
-      country: z.string().nullable(),
-      category: z.enum(CATEGORIES),
-      confidence: z.number().describe('0 to 1: how sure you are this is a real, specific, visitable place'),
-    }),
-  ),
-});
+/** Every provider in the chain failed and at least one said it was busy (rate limit / overload). */
+export class AiBusyError extends Error {}
 
-export type ExtractedPlace = z.infer<typeof ExtractionSchema>['places'][number];
+const FACTORIES: Record<string, () => PlaceExtractor | undefined> = {
+  gemini: geminiExtractor,
+  groq: groqExtractor,
+  claude: claudeExtractor,
+};
 
-const SYSTEM = `You extract real-world places from social media travel posts (Instagram Reels, TikToks, YouTube Shorts).
+/**
+ * Providers to try, in order. `AI_PROVIDERS` sets the order (default: the free ones first);
+ * a provider without its API key is skipped.
+ */
+export function configuredExtractors(
+  order = process.env.AI_PROVIDERS ?? 'gemini,groq,claude',
+): PlaceExtractor[] {
+  return order
+    .split(',')
+    .map((s) => FACTORIES[s.trim().toLowerCase()]?.())
+    .filter((p): p is PlaceExtractor => !!p);
+}
 
-Return every specific, visitable place the post recommends or shows: restaurants, cafés, bars, hotels, viewpoints, beaches, museums, shops, trails, landmarks.
-- Use the venue's proper name as a local would search for it on a map ("Cervejaria Ramiro", not "the seafood place").
-- Venue @handles usually name the venue: "@cafe_kitsune_tokyo" -> "Café Kitsuné".
-- Infer city and country from context (hashtags, the title, other places) when not stated per place.
-- Skip creators' own handles, generic areas used only as hashtags, brands that are not a location, and calls to action.
-- Score confidence lower when the name is ambiguous or you are guessing from a handle.
-If the post mentions no specific places, return an empty list.`;
+export interface ExtractionResult {
+  places: ExtractedPlace[];
+  provider: string;
+  /** Providers that failed before one succeeded, for logging. */
+  failures: { provider: string; message: string }[];
+}
 
-const client = new Anthropic();
-
-export async function extractPlaces(caption: string, url?: string): Promise<ExtractedPlace[]> {
-  const response = await client.beta.messages.parse({
-    model: 'claude-opus-5-5',
-    max_tokens: 16000,
-    // If a safety classifier declines (rare for captions), the API retries on a fallback model.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    // Simple extraction: low effort keeps latency and cost down.
-    output_config: { effort: 'low', format: betaZodOutputFormat(ExtractionSchema) },
-    system: SYSTEM,
-    messages: [
-      {
-        role: 'user',
-        content: `${url ? `Post URL: ${url}\n` : ''}Post text:\n"""\n${caption}\n"""`,
-      },
-    ],
-  });
-
-  if (response.stop_reason === 'refusal') return [];
-  return (response.parsed_output?.places ?? []).filter((p) => p.name.trim().length > 1);
+/** Try each provider in turn; the first that answers wins (an empty list is a valid answer). */
+export async function extractPlaces(
+  extractors: PlaceExtractor[],
+  caption: string,
+  url?: string,
+): Promise<ExtractionResult> {
+  const failures: ExtractionResult['failures'] = [];
+  let busy = false;
+  for (const extractor of extractors) {
+    try {
+      const places = (await extractor.extract(caption, url)).filter((p) => p.name.trim().length > 1);
+      return { places, provider: extractor.name, failures };
+    } catch (e) {
+      busy ||= e instanceof ProviderError && e.busy;
+      failures.push({ provider: extractor.name, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  const summary = failures.map((f) => f.message).join('; ') || 'no AI provider configured';
+  throw busy ? new AiBusyError(summary) : new Error(summary);
 }

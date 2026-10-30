@@ -1,14 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { extractPlaces } from './extract.ts';
+import { AiBusyError, configuredExtractors, extractPlaces } from './extract.ts';
 import { fetchCaption, geocode } from './sources.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY_BYTES = 32 * 1024;
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR ?? 60);
-/** Without Claude credentials the server still serves /caption; /extract answers 503 and the app falls back. */
-const AI_ENABLED = !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+/** AI providers with keys, in fallback order. With none the server still serves /caption; /extract answers 503 and the app falls back. */
+const EXTRACTORS = configuredExtractors();
+const AI_ENABLED = EXTRACTORS.length > 0;
 /** Comma-separated web origins allowed to call the API. Native apps send no Origin and are unaffected. */
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '*').split(',').map((s) => s.trim());
 
@@ -134,7 +134,8 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
 
   const started = Date.now();
   try {
-    const extracted = await extractPlaces(caption, url);
+    const { places: extracted, provider, failures } = await extractPlaces(EXTRACTORS, caption, url);
+    for (const f of failures) log('warn', 'ai_provider_failed', f);
     const places = [];
     for (const p of extracted.slice(0, 15)) {
       const hit = await geocode([p.name, p.city, p.country].filter(Boolean).join(', '));
@@ -150,20 +151,21 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
       });
     }
     log('info', 'extract', {
+      provider,
       found: places.length,
       located: places.filter((p) => p.lat).length,
       ms: Date.now() - started,
     });
     return send(req, res, 200, { caption, places });
   } catch (e) {
-    if (e instanceof Anthropic.RateLimitError)
-      return send(req, res, 503, { error: 'AI is busy, retry shortly' });
-    if (e instanceof Anthropic.APIError) {
-      log('error', 'claude_api_error', { status: e.status, message: e.message });
-      return send(req, res, 502, { error: 'AI extraction failed' });
+    const message = e instanceof Error ? e.message : String(e);
+    if (e instanceof AiBusyError) {
+      log('warn', 'ai_busy', { message });
+      // 429, not 503: the app reads 503 as "this server has no AI" and stops asking.
+      return send(req, res, 429, { error: 'AI is busy, retry shortly' });
     }
-    log('error', 'extract_failed', { message: e instanceof Error ? e.message : String(e) });
-    return send(req, res, 500, { error: 'Internal error' });
+    log('error', 'extract_failed', { message });
+    return send(req, res, 502, { error: 'AI extraction failed' });
   }
 }
 
@@ -181,7 +183,7 @@ const server = createServer((req, res) => {
 server.listen(PORT, () =>
   log('info', 'listening', {
     port: PORT,
-    aiExtraction: AI_ENABLED,
+    aiProviders: EXTRACTORS.map((p) => p.name),
     instagramCaptions: (process.env.INSTAGRAM_CAPTIONS ?? 'on').toLowerCase() !== 'off',
   }),
 );

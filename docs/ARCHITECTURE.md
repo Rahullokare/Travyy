@@ -24,7 +24,7 @@ src/
     query/        React Query client
   store/        Zustand store (persisted, versioned, validated) + selectors
   domain/       Domain models as zod schemas (types + runtime validation)
-server/         Node API: Claude extraction + geocoding
+server/         Node API: AI extraction (Gemini / Groq / Claude) + geocoding
 ```
 
 **Dependency direction:** `app → features → shared/store/domain`. Features may import other features' public pieces (a component, a pure function), but nothing in `shared/` imports from `features/`. One file crosses into `server/`: `server/src/instagramEmbed.ts`, the Instagram embed-page parser (9b). It has no imports and no Node or React Native APIs, so both projects compile it; keep it that way. Business logic lives in plain functions (`planner.ts`, `parseCaption.ts`, `links.ts`, `share.ts`), not in components, so it can be unit-tested without rendering.
@@ -106,9 +106,18 @@ Node 22.18+ strips TypeScript types natively, so `node src/index.ts` runs in pro
 ### 13. Free hosting first (Render), designed for its limits
 The API runs on Render's free web service, defined in `render.yaml` (Node runtime, so there's no Docker step; Node 22 runs the TypeScript directly).
 - **Sleeping server:** free services sleep after ~15 idle minutes and take 30–60 s to wake. The app pings `/health` on launch and on return to the foreground (`useWarmUpApi`), allows up to 90 s for server calls, and explains the wait in the UI after 8 s.
-- **Claude is optional and off in the free setup:** `/extract` answers 503 without credentials and the app extracts on-device, while `/caption` (Instagram) keeps working. `/health` reports `ai`, and the app remembers it (`apiStatus.ts`), so it doesn't wake a sleeping server just to be told no.
+- **AI is optional:** `/extract` answers 503 when no AI key is set and the app extracts on-device, while `/caption` (Instagram) keeps working. `/health` reports `ai`, and the app remembers it (`apiStatus.ts`), so it doesn't wake a sleeping server just to be told no.
 - **Instagram refuses Render's IP:** confirmed in the first device test, so phones read Instagram captions themselves (9b) and the server is only the fallback.
 - **Move to paid hosting** (no sleep) when real users arrive. The server and app code don't change; only the plan does.
+
+### 14. AI extraction: a chain of providers, free ones first
+*Decided 2026-10-30.* `/extract` used to call Claude only, which costs money, so the free deployment had no AI. Now `server/src/extract.ts` runs a chain of `PlaceExtractor`s (`server/src/ai/`): **Gemini** (free tier), then **Groq** (free tier), then **Claude** (paid, optional). A provider without its key is skipped; `AI_PROVIDERS` sets the order.
+- **One prompt and schema for all** (`ai/shared.ts`). Every reply is parsed with the same zod schema, so a provider that returns malformed JSON counts as a failure and the next one is tried, instead of bad data reaching the app.
+- **Gemini and Groq over plain `fetch`**, no SDKs: two small REST calls, and the server stays at two dependencies. Model IDs are env vars (`GEMINI_MODEL`, `GROQ_MODEL`) because free-tier models change often.
+- **An empty list is an answer**, not a failure: a caption with no places shouldn't use up the next provider's quota.
+- **Busy means 429:** when every provider failed and at least one was rate-limited, `/extract` answers 429. Not 503, which the app reads as "this server has no AI" and remembers.
+- **Privacy:** Google may use Gemini free-tier requests to improve its products. Captions come from public posts, but the privacy policy has to say so. A paid tier removes this.
+- **Next:** the same chain is where images and video go (cover images, screenshots, YouTube links), since Gemini accepts them directly.
 
 ## Quality gates
 

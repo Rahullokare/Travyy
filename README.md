@@ -72,14 +72,14 @@ Copy `.env.example` to `.env.local`:
 
 ## Travyy API (optional, recommended)
 
-The server reads captions the device can't (Instagram, and any link from the web app) and extracts places with Claude.
+The server reads captions the device can't (Instagram, and any link from the web app) and extracts places with AI: **Gemini** (free tier), then **Groq** (free tier) if Gemini fails or is rate-limited, then **Claude** (paid, optional). Set the key for any of them; providers without a key are skipped, and `AI_PROVIDERS` changes the order.
 
 ```bash
 cd server && npm install
 ```
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... npm run dev
+GEMINI_API_KEY=... GROQ_API_KEY=... npm run dev
 ```
 
 Point the app at it (use your computer's LAN IP when testing on a phone):
@@ -90,7 +90,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8787 npm start
 
 | Endpoint | Body | Returns |
 |---|---|---|
-| `POST /extract` | `{ "url"?, "text"? }` | `{ caption, places: Candidate[] }`. Reads the caption, then extracts places with Claude. Returns 503 when no Claude key is set |
+| `POST /extract` | `{ "url"?, "text"? }` | `{ caption, places: Candidate[] }`. Reads the caption, then extracts places with the first AI provider that answers. Returns 503 when no AI key is set, 429 when every provider is rate-limited |
 | `POST /caption` | `{ "url" }` | `{ caption, source }`. Caption only, no AI needed |
 | `GET /health` | | `{ ok: true, ai }`. `ai` says whether `/extract` is available; the app remembers it and skips `/extract` when it isn't |
 
@@ -100,7 +100,7 @@ The server runs TypeScript directly on Node 22 (`node src/index.ts`) and ships w
 
 ## Free deployment: API on Render + Android APK
 
-Everything below is free: Render's free web service, EAS Build's free plan, OpenFreeMap tiles and OpenStreetMap geocoding. Claude is the only paid piece, and it's optional.
+Everything below is free: Render's free web service, EAS Build's free plan, OpenFreeMap tiles, OpenStreetMap geocoding, and Gemini and Groq's free AI tiers. Claude is the only paid piece, and it's optional.
 
 ### 1. Deploy the API on Render (free)
 
@@ -109,7 +109,7 @@ Everything below is free: Render's free web service, EAS Build's free plan, Open
 3. When it's live, open `https://<your-service>.onrender.com/health`. It should show `{"ok":true}`.
 4. If your URL isn't exactly `https://travyy-api.onrender.com`, put your URL in `EXPO_PUBLIC_API_URL` in [`eas.json`](eas.json) (all three profiles).
 
-Free services sleep after about 15 idle minutes and take 30–60 s to wake. The app pings `/health` when it opens, waits up to 90 s for the server, and tells the user when it's waking up. Leave `ANTHROPIC_API_KEY` unset to stay free: Instagram captions still work, and places are extracted on the phone.
+Free services sleep after about 15 idle minutes and take 30–60 s to wake. The app pings `/health` when it opens, waits up to 90 s for the server, and tells the user when it's waking up. For free AI extraction, create keys at [Google AI Studio](https://aistudio.google.com/apikey) and [Groq](https://console.groq.com/keys) and set `GEMINI_API_KEY` and `GROQ_API_KEY` in the Render dashboard (one is enough; both gives a fallback). Free tiers have per-minute and per-day limits; when they run out, the app parses on the phone for that request. Google may use Gemini free-tier requests to improve its products, so mention it in your privacy policy. Without any key, Instagram captions still work and places are extracted on the phone.
 
 ### 2. Build the APK (free)
 
@@ -156,7 +156,7 @@ The web app is a static SPA: `npm run build:web`, then deploy `dist/` to any sta
 
 ## Roadmap (next)
 
-1. **Paid hosting when usage grows:** a paid Render instance (no sleeping), plus Claude extraction for better results on messy captions.
+1. **Paid hosting when usage grows:** a paid Render instance (no sleeping), plus Claude or a paid Gemini tier when the free AI limits run out.
 2. **Billing:** RevenueCat behind `useEntitlements()` (the paywall UI is built; purchases are in demo mode).
 3. **Accounts and cloud sync** (Supabase), and with them a move from AsyncStorage to SQLite.
 4. **Crash reporting and analytics:** Sentry and PostHog behind the existing `logger`/`track` seams.

@@ -21,7 +21,12 @@ services:
         value: 'on'
       - key: GEOCODER_USER_AGENT
         value: 'Travyy/1.0 (replace with your contact email)'
-      # Optional and paid per use: Claude extraction. Leave unset for the free setup;
-      # places are then extracted on the phone. To enable, uncomment and set it in the dashboard.
+      # AI extraction. Gemini and Groq have free tiers: set their keys in the dashboard
+      # (Render asks for sync: false values on first deploy). Without any key, places are
+      # extracted on the phone. Claude is optional and paid per use.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
       # - key: ANTHROPIC_API_KEY
       #   sync: false
