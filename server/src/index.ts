@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { z } from 'zod';
 import { AiBusyError, configuredExtractors, extractFromPost } from './extract.ts';
 import { isTrustedMediaHost, youtubeWatchUrl } from './media.ts';
+import { userIdFrom } from './auth.ts';
 import { fetchCaption, geocodePlace } from './sources.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -35,11 +36,11 @@ function log(level: 'info' | 'warn' | 'error', msg: string, fields: Record<strin
 
 // In-memory limiter: fine for one instance. Move to Redis/Upstash when running several.
 const hits = new Map<string, { n: number; reset: number }>();
-function rateLimited(ip: string): boolean {
+function rateLimited(key: string): boolean {
   const now = Date.now();
-  const entry = hits.get(ip);
+  const entry = hits.get(key);
   if (!entry || entry.reset < now) {
-    hits.set(ip, { n: 1, reset: now + 3_600_000 });
+    hits.set(key, { n: 1, reset: now + 3_600_000 });
     return false;
   }
   entry.n += 1;
@@ -57,7 +58,7 @@ function corsHeaders(req: IncomingMessage): Record<string, string> {
     ? {
         'Access-Control-Allow-Origin': allowed,
         'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         Vary: 'Origin',
       }
     : {};
@@ -87,9 +88,13 @@ function clientIp(req: IncomingMessage): string {
   );
 }
 
-/** Rate-limit, read and validate a JSON body. Sends the error response itself and returns undefined on failure. */
+/**
+ * Rate-limit, read and validate a JSON body. Sends the error response itself and returns undefined on failure.
+ * Signed-in users are limited per account, so people sharing an IP (mobile carriers, offices) don't share a limit.
+ */
 async function readRequest<T>(req: IncomingMessage, res: ServerResponse, schema: z.ZodType<T>) {
-  if (rateLimited(clientIp(req))) {
+  const userId = await userIdFrom(req.headers.authorization);
+  if (rateLimited(userId ? `user:${userId}` : `ip:${clientIp(req)}`)) {
     send(req, res, 429, { error: 'Too many requests, try again later.' });
     return undefined;
   }
@@ -105,7 +110,7 @@ async function readRequest<T>(req: IncomingMessage, res: ServerResponse, schema:
     send(req, res, 400, { error: z.prettifyError(parsed.error) });
     return undefined;
   }
-  return parsed.data;
+  return { body: parsed.data, userId };
 }
 
 /** Fetch the post's caption and log where it came from (never the caption itself). */
@@ -125,16 +130,18 @@ async function lookupCaption(url: string) {
 }
 
 async function handleCaption(req: IncomingMessage, res: ServerResponse) {
-  const body = await readRequest(req, res, CaptionRequest);
-  if (!body) return;
+  const request = await readRequest(req, res, CaptionRequest);
+  if (!request) return;
+  const { body } = request;
   const found = await lookupCaption(body.url);
   return send(req, res, 200, { caption: found.text ?? null, source: found.source });
 }
 
 async function handleExtract(req: IncomingMessage, res: ServerResponse) {
   if (!AI_ENABLED) return send(req, res, 503, { error: 'AI extraction is not configured on this server' });
-  const body = await readRequest(req, res, ExtractRequest);
-  if (!body) return;
+  const request = await readRequest(req, res, ExtractRequest);
+  if (!request) return;
+  const { body, userId } = request;
   const { url, text } = body;
 
   const fetched = url && (!text || text.length < SHORT_TEXT) ? await lookupCaption(url) : undefined;
@@ -174,6 +181,7 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
     log('info', 'extract', {
       provider,
       media,
+      signedIn: !!userId,
       found: places.length,
       located: places.filter((p) => p.lat).length,
       ms: Date.now() - started,

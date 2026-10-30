@@ -61,6 +61,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-web-browser',
+    // Keeps the signed-in session in the iOS Keychain / Android Keystore.
+    'expo-secure-store',
     ['expo-location', { locationWhenInUsePermission: LOCATION_COPY }],
     // Phone map: MapLibre Native + OpenFreeMap tiles. Free, no API key or billing account.
     '@maplibre/maplibre-react-native',

@@ -21,6 +21,10 @@ services:
         value: 'on'
       - key: VIDEO_EXTRACTION
         value: 'on'
+      # Supabase project: signed-in users get rate limits per account instead of per IP.
+      # Public URL, not a secret; the server only reads the project's public signing keys.
+      - key: SUPABASE_URL
+        value: 'https://ukmpsstqitpztuciozog.supabase.co'
       - key: GEOCODER_USER_AGENT
         value: 'Travyy/1.0 (replace with your contact email)'
       # AI extraction. Gemini and Groq have free tiers: set their keys in the dashboard

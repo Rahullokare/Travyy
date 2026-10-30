@@ -66,6 +66,7 @@ Copy `.env.example` to `.env.local`:
 |---|---|
 | `EXPO_PUBLIC_API_URL` | Travyy API for AI extraction (optional; without it extraction runs on-device) |
 | `EXPO_PUBLIC_MAP_STYLE_URL` | MapLibre style for the web map (defaults to OpenFreeMap, free, no key) |
+| `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase project for sign-in (optional; without them the app has no accounts). The anon key is public by design; never use the `service_role` key |
 | `APP_VARIANT` | `development` / `preview` / `production`: app name, bundle ID and scheme, so builds install side by side |
 
 `EXPO_PUBLIC_*` values are bundled into the app. Never put secrets in them.
@@ -158,5 +159,5 @@ The web app is a static SPA: `npm run build:web`, then deploy `dist/` to any sta
 
 1. **Paid hosting when usage grows:** a paid Render instance (no sleeping), plus Claude or a paid Gemini tier when the free AI limits run out.
 2. **Billing:** RevenueCat behind `useEntitlements()` (the paywall UI is built; purchases are in demo mode).
-3. **Accounts and cloud sync** (Supabase), and with them a move from AsyncStorage to SQLite.
+3. **Cloud sync** of saves and trips for signed-in users (Supabase tables with row-level security), and Google / Apple sign-in. Email sign-in is built.
 4. **Crash reporting and analytics:** Sentry and PostHog behind the existing `logger`/`track` seams.

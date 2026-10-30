@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { SourcePlatform } from '@/domain/models';
 import { fetchWithTimeout } from '@/shared/lib/http';
 import { readInstagramPost } from './instagram';
+import { authHeaders } from '@/features/auth/session';
 
 const OEmbedSchema = z.object({ title: z.string().optional(), thumbnail_url: z.string().optional() });
 
@@ -27,7 +28,7 @@ export async function fetchServerCaption(
   try {
     const res = await fetchWithTimeout(`${apiUrl}/caption`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify({ url }),
       timeoutMs: 75_000, // tolerates a free-tier cold start (≤60 s)
       signal,

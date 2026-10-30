@@ -12,7 +12,8 @@ export type AnalyticsEvent =
   | { name: 'places_saved'; props: { count: number; platform: SourcePlatform } }
   | { name: 'trip_created'; props: { days: number; stops: number } }
   | { name: 'place_visited'; props: { category: string } }
-  | { name: 'paywall_viewed'; props: { trigger: string } };
+  | { name: 'paywall_viewed'; props: { trigger: string } }
+  | { name: 'signed_in'; props: { method: 'email' | 'google' | 'apple' } };
 
 function send(event: AnalyticsEvent) {
   if (__DEV__) console.log('[analytics]', event.name, event.props);

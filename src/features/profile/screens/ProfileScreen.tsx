@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { View } from 'react-native';
 import type { Category } from '@/domain/models';
+import { authEnabled, signOut, useSession } from '@/features/auth/session';
 import { CATEGORY_META } from '@/features/places/categories';
 import { FREE_LIMITS, useEntitlements } from '@/features/paywall/entitlements';
 import { confirm } from '@/shared/lib/platform';
@@ -72,6 +73,8 @@ export function ProfileScreen() {
         </Card>
       ) : null}
 
+      {authEnabled ? <AccountCard /> : null}
+
       <Card style={styles.gap}>
         <Text variant="heading">{isPro ? 'Travyy Pro ✨' : 'Free plan'}</Text>
         <Text variant="caption">
@@ -99,6 +102,46 @@ export function ProfileScreen() {
         }}
       />
     </ScreenScroll>
+  );
+}
+
+function AccountCard() {
+  const styles = useStyles();
+  const session = useSession();
+  // Still reading the saved session: show nothing rather than a flash of "Sign in".
+  if (session === undefined) return null;
+  if (!session) {
+    return (
+      <Card style={styles.gap}>
+        <Text variant="heading">Your account</Text>
+        <Text variant="caption">
+          Sign in with your email to get ready for backup and syncing across your phones. Your saves stay on
+          this phone either way.
+        </Text>
+        <Button title="Sign in" variant="secondary" onPress={() => router.push('/sign-in')} />
+      </Card>
+    );
+  }
+  return (
+    <Card style={styles.gap}>
+      <Text variant="heading">Your account</Text>
+      <Text variant="caption">Signed in as {session.user.email ?? 'you'}</Text>
+      <Button
+        title="Sign out"
+        variant="ghost"
+        onPress={async () => {
+          if (
+            await confirm({
+              title: 'Sign out?',
+              message: 'Your saves and trips stay on this phone.',
+              confirmText: 'Sign out',
+            })
+          ) {
+            await signOut();
+          }
+        }}
+      />
+    </Card>
   );
 }
 

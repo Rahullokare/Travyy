@@ -9,6 +9,7 @@ import { detectPlatform, extractUrl, parseGoogleMapsUrl } from '../links';
 import { parseCaption } from '../parseCaption';
 import { fetchCaption, fetchServerCaption } from './captions';
 import { geocodeCandidates, reverseGeocode, searchPlaces } from './geocoding';
+import { authHeaders } from '@/features/auth/session';
 
 const SHORT_TEXT = 200;
 
@@ -74,7 +75,7 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
         const res = ApiResponseSchema.parse(
           await fetchJson(`${env.apiUrl}/extract`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
             // Cover and reel video let the AI read place names shown on screen when the caption is weak.
             body: JSON.stringify({
               url,

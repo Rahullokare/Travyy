@@ -75,6 +75,7 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="add" options={{ presentation: 'modal', title: 'Save a spot' }} />
           <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="sign-in" options={{ presentation: 'modal', title: '' }} />
           <Stack.Screen name="place/[id]" options={{ title: '' }} />
           <Stack.Screen name="trip/new" options={{ presentation: 'modal', title: 'Plan a trip' }} />
           <Stack.Screen name="trip/[id]" options={{ title: '' }} />
