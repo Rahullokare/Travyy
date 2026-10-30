@@ -3,6 +3,7 @@ export {
   CONTENT_MAX_WIDTH,
   darkTheme,
   elevation,
+  lift,
   lightTheme,
   radius,
   spacing,

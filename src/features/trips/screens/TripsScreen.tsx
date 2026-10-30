@@ -1,15 +1,16 @@
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useEntitlements } from '@/features/paywall/entitlements';
 import { track } from '@/shared/lib/analytics';
-import { CONTENT_MAX_WIDTH, makeStyles } from '@/shared/theme';
-import { Button, EmptyState, Screen, Text } from '@/shared/ui';
+import { CONTENT_MAX_WIDTH, lift, makeStyles, useTheme } from '@/shared/theme';
+import { Button, EmptyState, Icon, PressableScale, Screen, Text } from '@/shared/ui';
 import { groupByCity, useAppStore } from '@/store';
 import { suggestedDays } from '../planner';
 
 export function TripsScreen() {
   const styles = useStyles();
+  const { dark } = useTheme();
   const trips = useAppStore((s) => s.trips);
   const places = useAppStore((s) => s.places);
   const { canCreateTrip } = useEntitlements();
@@ -31,24 +32,29 @@ export function TripsScreen() {
         {ready.slice(0, 3).map((c) => {
           const days = suggestedDays(c.places.length);
           return (
-            <Pressable
+            <PressableScale
               key={c.city}
+              scale={0.98}
               style={styles.suggest}
               onPress={() => startTrip(c.city)}
               accessibilityRole="button"
+              accessibilityLabel={`Auto-plan a trip to ${c.city}`}
             >
               <View style={styles.flex}>
                 <Text variant="heading" color="textInverse">
                   {c.city}
                 </Text>
                 <Text variant="caption" color="textInverseMuted">
-                  {c.places.length} saved spots · about {days} day{days > 1 ? 's' : ''}
+                  {c.places.length} saved spots · about {days} day{days === 1 ? '' : 's'}
                 </Text>
               </View>
-              <Text variant="bodyStrong" color="primary">
-                Auto-plan ✨
-              </Text>
-            </Pressable>
+              <View style={styles.autoPlan}>
+                <Icon name="sparkles" size={14} color="onPrimary" />
+                <Text variant="caption" color="onPrimary" style={styles.autoPlanLabel}>
+                  Auto-plan
+                </Text>
+              </View>
+            </PressableScale>
           );
         })}
         {trips.length > 0 ? (
@@ -70,19 +76,27 @@ export function TripsScreen() {
           const stops = item.days.reduce((n, d) => n + d.placeIds.length, 0);
           return (
             <View style={styles.column}>
-              <Pressable
-                style={styles.trip}
+              <PressableScale
+                scale={0.98}
+                style={[styles.trip, lift(dark)]}
+                pressedStyle={styles.tripPressed}
                 onPress={() => router.push(`/trip/${item.id}`)}
                 accessibilityRole="button"
               >
-                <Text style={styles.tripEmoji}>🧳</Text>
+                <View style={styles.tripBadge}>
+                  <Text style={styles.tripEmoji}>🧳</Text>
+                </View>
                 <View style={styles.flex}>
-                  <Text variant="heading">{item.name}</Text>
-                  <Text variant="caption">
-                    {item.city} · {item.days.length} day{item.days.length === 1 ? '' : 's'} · {stops} stops
+                  <Text variant="heading" numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text variant="caption" numberOfLines={1} style={styles.tabular}>
+                    {item.city} · {item.days.length} day{item.days.length === 1 ? '' : 's'} · {stops} stop
+                    {stops === 1 ? '' : 's'}
                   </Text>
                 </View>
-              </Pressable>
+                <Icon name="chevron-forward" size={18} color="textMuted" />
+              </PressableScale>
             </View>
           );
         }}
@@ -115,21 +129,42 @@ const useStyles = makeStyles((t) => ({
   suggest: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: t.colors.surfaceInverse,
   },
+  autoPlan: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: t.colors.primary,
+  },
+  autoPlanLabel: { fontWeight: '700' },
+  tabular: { fontVariant: ['tabular-nums'] },
   trip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: t.colors.surface,
     borderWidth: 1,
     borderColor: t.colors.border,
   },
-  tripEmoji: { fontSize: 30, lineHeight: 38 },
+  tripPressed: { backgroundColor: t.colors.surfacePressed },
+  tripBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: t.colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripEmoji: { fontSize: 26, lineHeight: 32 },
   footer: { marginTop: 4 },
 }));

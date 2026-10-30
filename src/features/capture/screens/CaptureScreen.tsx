@@ -2,15 +2,15 @@ import { useMutation } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { CATEGORIES, CATEGORY_META } from '@/features/places/categories';
 import { useEntitlements } from '@/features/paywall/entitlements';
 import type { Candidate } from '@/domain/models';
 import { env } from '@/shared/config/env';
 import { track } from '@/shared/lib/analytics';
 import { haptics } from '@/shared/lib/platform';
-import { makeStyles } from '@/shared/theme';
-import { Button, Card, Icon, ScreenScroll, Text, TextField } from '@/shared/ui';
+import { makeStyles, useTheme } from '@/shared/theme';
+import { Button, Card, Icon, PressableScale, ScreenScroll, Text, TextField } from '@/shared/ui';
 import { useAppStore } from '@/store';
 import { extractPlaces, type ExtractionInput, type ExtractionResult } from '../api/extract';
 import { searchPlaces } from '../api/geocoding';
@@ -108,13 +108,13 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
         </Text>
 
         {hasClipboard && !link ? (
-          <Pressable style={styles.pasteBanner} onPress={paste} accessibilityRole="button">
+          <PressableScale scale={0.98} style={styles.pasteBanner} onPress={paste} accessibilityRole="button">
             <Icon name="clipboard" size={20} color="primary" />
             <Text variant="bodyStrong" style={styles.flex}>
               Paste from clipboard
             </Text>
             <Icon name="arrow-forward" size={18} color="primary" />
-          </Pressable>
+          </PressableScale>
         ) : null}
 
         <TextField
@@ -138,10 +138,12 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
             multiline
           />
         ) : (
-          <Pressable onPress={() => setShowCaption(true)} accessibilityRole="button">
-            <Text variant="bodyStrong" color="accent">
-              + Paste a caption or type a place name instead
-            </Text>
+          <Pressable onPress={() => setShowCaption(true)} accessibilityRole="button" hitSlop={10}>
+            {({ pressed }) => (
+              <Text variant="bodyStrong" color="accent" style={pressed && styles.linkPressed}>
+                + Paste a caption or type a place name instead
+              </Text>
+            )}
           </Pressable>
         )}
 
@@ -159,6 +161,7 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
 /** Loading state. After a few seconds, explain the wait (a sleeping free-tier server takes up to a minute). */
 function FindingSpots() {
   const styles = useStyles();
+  const { colors } = useTheme();
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSlow(true), 8_000);
@@ -166,13 +169,16 @@ function FindingSpots() {
   }, []);
   return (
     <View style={styles.center}>
-      <Text style={styles.bigEmoji}>🔎</Text>
+      <View style={styles.searchBadge}>
+        <Text style={styles.bigEmoji}>🔎</Text>
+      </View>
       <Text variant="heading">Finding the spots…</Text>
       <Text variant="caption" align="center">
         {slow
           ? 'Still working. The first lookup after a quiet spell can take up to a minute while our server wakes up.'
           : 'Reading the caption and pinning every place it mentions.'}
       </Text>
+      <ActivityIndicator color={colors.primary} style={styles.spinner} />
     </View>
   );
 }
@@ -276,8 +282,9 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           const located = c.lat !== undefined;
           const meta = CATEGORY_META[c.category];
           return (
-            <Pressable
+            <PressableScale
               key={`${c.name}-${i}`}
+              scale={0.98}
               disabled={!located}
               onPress={() => toggle(i)}
               accessibilityRole="checkbox"
@@ -319,7 +326,7 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
                   </Text>
                 </Pressable>
               )}
-            </Pressable>
+            </PressableScale>
           );
         })}
       </ScreenScroll>
@@ -352,7 +359,18 @@ const useStyles = makeStyles((t) => ({
     padding: 24,
     backgroundColor: t.colors.background,
   },
-  bigEmoji: { fontSize: 56, lineHeight: 68 },
+  searchBadge: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: t.colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  bigEmoji: { fontSize: 48, lineHeight: 58 },
+  spinner: { marginTop: 8 },
+  linkPressed: { opacity: 0.6 },
   pasteBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,7 +389,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1.5,
     borderColor: t.colors.border,
   },
-  candidateOn: { borderColor: t.colors.primary },
+  candidateOn: { borderColor: t.colors.primary, backgroundColor: t.colors.primarySoft },
   pill: {
     paddingHorizontal: 10,
     paddingVertical: 6,

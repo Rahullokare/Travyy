@@ -3,10 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>%WEB_TITLE%</title>
     <meta name="description" content="Turn travel reels into real trips." />
-    <meta name="theme-color" content="#FF5A36" />
+    <meta name="theme-color" content="#FAF7F2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16130F" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <!-- Installable web app; its share_target puts Travyy in Android's share sheet. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
@@ -23,6 +25,43 @@
         display: flex;
         height: 100%;
         flex: 1;
+      }
+    </style>
+    <!-- Make the installed web app feel native: no grey tap flash, no double-tap zoom delay,
+         no pull-to-refresh fighting our scroll views, no text selection on long-press. -->
+    <style id="native-feel">
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      body {
+        overscroll-behavior: none;
+        background-color: #faf7f2;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-color: #16130f;
+        }
+      }
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+      [role='button'],
+      [role='tab'],
+      [role='checkbox'],
+      [role='radio'],
+      [role='link'] {
+        touch-action: manipulation;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      input,
+      textarea {
+        /* Under 16px, iOS Safari zooms the page on focus. */
+        font-size: max(16px, 1em);
       }
     </style>
   </head>

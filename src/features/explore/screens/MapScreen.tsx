@@ -1,7 +1,8 @@
 import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Place } from '@/domain/models';
 import { CATEGORY_META } from '@/features/places/categories';
@@ -13,7 +14,7 @@ import { useLayout } from '@/shared/lib/useLayout';
 import { useUserLocation } from '@/shared/lib/useUserLocation';
 import { Map, type MapHandle } from '@/shared/map';
 import { elevation, makeStyles, useTheme } from '@/shared/theme';
-import { Chip, ChipRow, EmptyState, Icon, IconButton, Text } from '@/shared/ui';
+import { Chip, ChipRow, EmptyState, Icon, IconButton, PressableScale, Text, useEntrance } from '@/shared/ui';
 import { cityOf, groupByCity, useAppStore } from '@/store';
 
 const NEARBY_RADIUS_M = 1500;
@@ -21,6 +22,7 @@ const SIDE_PANEL_WIDTH = 400;
 
 export function MapScreen() {
   const styles = useStyles();
+  const entrance = useEntrance('rise');
   const { dark } = useTheme();
   const insets = useSafeAreaInsets();
   const { isWide } = useLayout();
@@ -79,8 +81,16 @@ export function MapScreen() {
   );
 
   const selectedCard = selected ? (
-    <Pressable style={[styles.card, elevation(dark)]} onPress={() => router.push(`/place/${selected.id}`)}>
-      <Text style={styles.cardEmoji}>{CATEGORY_META[selected.category].emoji}</Text>
+    <PressableScale
+      scale={0.98}
+      style={[styles.card, elevation(dark)]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${selected.name}`}
+      onPress={() => router.push(`/place/${selected.id}`)}
+    >
+      <View style={[styles.cardBadge, { backgroundColor: `${CATEGORY_META[selected.category].color}22` }]}>
+        <Text style={styles.cardEmoji}>{CATEGORY_META[selected.category].emoji}</Text>
+      </View>
       <View style={styles.flex}>
         <Text variant="heading" numberOfLines={1}>
           {selected.name}
@@ -100,17 +110,21 @@ export function MapScreen() {
           </Text>
         ) : null}
       </View>
-      <Pressable
+      <PressableScale
+        scale={0.92}
+        hitSlop={6}
         style={styles.goButton}
         accessibilityRole="button"
         accessibilityLabel={`Directions to ${selected.name}`}
         onPress={() => openInMaps(selected)}
       >
         <Icon name="navigate" size={20} color="onPrimary" />
-      </Pressable>
-    </Pressable>
+      </PressableScale>
+    </PressableScale>
   ) : nearby.length > 0 ? (
-    <Pressable
+    <PressableScale
+      scale={0.98}
+      accessibilityRole="button"
       style={[styles.card, styles.cardInverse, elevation(dark)]}
       onPress={() => {
         setSelectedId(nearby[0].place.id);
@@ -127,7 +141,15 @@ export function MapScreen() {
         </Text>
       </View>
       <Icon name="chevron-forward" size={20} color="textInverse" />
-    </Pressable>
+    </PressableScale>
+  ) : null;
+
+  // The card rises in when one appears; dismissing is instant. Switching between pins
+  // swaps content in place: the user is comparing spots, so motion would only slow them.
+  const floatingCard = selectedCard ? (
+    <Animated.View key={selected ? 'selected' : 'nearby'} style={[styles.cardSlot, entrance]}>
+      {selectedCard}
+    </Animated.View>
   ) : null;
 
   const map = (
@@ -182,7 +204,7 @@ export function MapScreen() {
               accessibilityLabel="Show my location"
               onPress={locate}
             />
-            {selectedCard}
+            {floatingCard}
           </View>
         </View>
       </View>
@@ -193,9 +215,9 @@ export function MapScreen() {
     <View style={styles.flex}>
       {map}
       <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={styles.headerPill}>
+        <View style={[styles.headerPill, elevation(dark)]}>
           <Text style={styles.brand}>travyy</Text>
-          <Text variant="caption" style={styles.bold}>
+          <Text variant="caption" style={[styles.bold, styles.tabular]}>
             {places.length} saved · {places.filter((p) => p.visitedAt).length} visited
           </Text>
         </View>
@@ -209,8 +231,9 @@ export function MapScreen() {
             accessibilityLabel="Show my location"
             onPress={locate}
           />
-          <Pressable
+          <PressableScale
             style={[styles.fab, elevation(dark)]}
+            pressedStyle={styles.fabPressed}
             accessibilityRole="button"
             accessibilityLabel="Save a spot"
             onPress={() => router.push('/add')}
@@ -219,9 +242,9 @@ export function MapScreen() {
             <Text variant="bodyStrong" color="onPrimary" style={styles.fabLabel}>
               Save a spot
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
-        {selectedCard}
+        {floatingCard}
       </View>
     </View>
   );
@@ -242,11 +265,14 @@ const useStyles = makeStyles((t) => ({
     justifyContent: 'space-between',
     backgroundColor: t.colors.overlay,
     borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   brand: { fontSize: 22, fontWeight: '900', color: t.colors.primary, letterSpacing: -0.5 },
   bold: { fontWeight: '600' },
+  tabular: { fontVariant: ['tabular-nums'] },
   bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 12, alignItems: 'center' },
   fabRow: {
     width: '100%',
@@ -264,24 +290,28 @@ const useStyles = makeStyles((t) => ({
     height: 52,
     borderRadius: 999,
   },
-  fabLabel: { fontSize: 16 },
+  fabPressed: { backgroundColor: t.colors.primaryPressed },
+  fabLabel: { fontSize: 16, letterSpacing: -0.2 },
+  cardSlot: { width: '100%', maxWidth: 520 },
   card: {
     width: '100%',
-    maxWidth: 520,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: t.colors.surface,
     borderRadius: 24,
-    padding: 16,
+    borderWidth: 1,
+    borderColor: t.colors.border,
+    padding: 14,
   },
-  cardInverse: { backgroundColor: t.colors.surfaceInverse },
-  cardEmoji: { fontSize: 30, lineHeight: 38 },
+  cardInverse: { backgroundColor: t.colors.surfaceInverse, borderColor: t.colors.surfaceInverse },
+  cardBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  cardEmoji: { fontSize: 26, lineHeight: 32 },
   note: { marginTop: 6, fontStyle: 'italic' },
   goButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: t.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',

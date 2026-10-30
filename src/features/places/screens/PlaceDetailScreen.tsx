@@ -1,10 +1,10 @@
 import * as WebBrowser from 'expo-web-browser';
 import { router, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { PLATFORM_LABEL } from '@/features/capture/links';
 import { track } from '@/shared/lib/analytics';
-import { confirm, openInMaps } from '@/shared/lib/platform';
+import { confirm, haptics, openInMaps } from '@/shared/lib/platform';
 import { Map } from '@/shared/map';
 import { makeStyles, useTheme } from '@/shared/theme';
 import {
@@ -14,6 +14,7 @@ import {
   EmptyState,
   Icon,
   IconButton,
+  PressableScale,
   ScreenScroll,
   Section,
   Text,
@@ -100,7 +101,10 @@ export function PlaceDetailScreen({ id }: { id: string }) {
             />
           }
           onPress={() => {
-            if (!place.visitedAt) track('place_visited', { category: place.category });
+            if (!place.visitedAt) {
+              track('place_visited', { category: place.category });
+              haptics.success();
+            }
             toggleVisited(place.id);
           }}
         />
@@ -133,8 +137,10 @@ export function PlaceDetailScreen({ id }: { id: string }) {
       </Section>
 
       {place.sourceUrl ? (
-        <Pressable
+        <PressableScale
+          scale={0.98}
           style={styles.source}
+          pressedStyle={styles.sourcePressed}
           accessibilityRole="link"
           onPress={() => WebBrowser.openBrowserAsync(place.sourceUrl!)}
         >
@@ -146,7 +152,7 @@ export function PlaceDetailScreen({ id }: { id: string }) {
             </Text>
           </View>
           <Icon name="open-outline" size={18} color="textMuted" />
-        </Pressable>
+        </PressableScale>
       ) : null}
     </ScreenScroll>
   );
@@ -156,7 +162,7 @@ const useStyles = makeStyles((t) => ({
   content: { paddingBottom: 48 },
   mapWrap: {
     height: 220,
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: t.colors.border,
@@ -177,9 +183,10 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: t.colors.surface,
     borderWidth: 1,
     borderColor: t.colors.border,
   },
+  sourcePressed: { backgroundColor: t.colors.surfacePressed },
 }));

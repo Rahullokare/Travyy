@@ -1,10 +1,22 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { CATEGORY_META } from '@/features/places/categories';
 import { track } from '@/shared/lib/analytics';
+import { haptics } from '@/shared/lib/platform';
 import { CONTENT_MAX_WIDTH, makeStyles } from '@/shared/theme';
-import { Button, Chip, ChipRow, EmptyState, Icon, ScreenScroll, Section, Text, TextField } from '@/shared/ui';
+import {
+  Button,
+  Chip,
+  ChipRow,
+  EmptyState,
+  Icon,
+  PressableScale,
+  ScreenScroll,
+  Section,
+  Text,
+  TextField,
+} from '@/shared/ui';
 import { groupByCity, useAppStore } from '@/store';
 import { suggestedDays } from '../planner';
 
@@ -44,6 +56,7 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
       days: dayCount,
     });
     track('trip_created', { days: dayCount, stops: chosen.length });
+    haptics.success();
     router.dismiss();
     router.push(`/trip/${id}`);
   };
@@ -70,25 +83,37 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
 
         <Section title="How many days">
           <View style={styles.stepper}>
-            <Pressable
-              style={styles.stepButton}
-              onPress={() => setDays(Math.max(1, dayCount - 1))}
+            <PressableScale
+              scale={0.9}
+              disabled={dayCount <= 1}
+              style={[styles.stepButton, dayCount <= 1 && styles.stepDisabled]}
+              pressedStyle={styles.stepPressed}
+              onPress={() => {
+                haptics.selection();
+                setDays(Math.max(1, dayCount - 1));
+              }}
               accessibilityRole="button"
               accessibilityLabel="Fewer days"
             >
               <Icon name="remove" />
-            </Pressable>
+            </PressableScale>
             <Text variant="title" style={styles.days} accessibilityLiveRegion="polite">
               {dayCount} day{dayCount === 1 ? '' : 's'}
             </Text>
-            <Pressable
-              style={styles.stepButton}
-              onPress={() => setDays(Math.min(MAX_DAYS, dayCount + 1))}
+            <PressableScale
+              scale={0.9}
+              disabled={dayCount >= MAX_DAYS}
+              style={[styles.stepButton, dayCount >= MAX_DAYS && styles.stepDisabled]}
+              pressedStyle={styles.stepPressed}
+              onPress={() => {
+                haptics.selection();
+                setDays(Math.min(MAX_DAYS, dayCount + 1));
+              }}
               accessibilityRole="button"
               accessibilityLabel="More days"
             >
               <Icon name="add" />
-            </Pressable>
+            </PressableScale>
           </View>
           <Text variant="caption">
             ~{Math.ceil(chosen.length / dayCount)} stops per day, grouped by neighbourhood.
@@ -101,19 +126,29 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
           {cityPlaces.map((p) => {
             const on = !excluded.has(p.id);
             return (
-              <Pressable
+              <PressableScale
                 key={p.id}
+                scale={0.98}
                 style={[styles.item, on && styles.itemOn]}
                 onPress={() => toggle(p.id)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: on }}
               >
                 <Text style={styles.itemEmoji}>{CATEGORY_META[p.category].emoji}</Text>
-                <Text variant="bodyStrong" color={on ? 'text' : 'textMuted'} style={styles.flex}>
+                <Text
+                  variant="bodyStrong"
+                  color={on ? 'text' : 'textMuted'}
+                  style={styles.flex}
+                  numberOfLines={1}
+                >
                   {p.name}
                 </Text>
-                <Icon name={on ? 'checkmark' : 'add'} size={20} color={on ? 'primary' : 'textMuted'} />
-              </Pressable>
+                <Icon
+                  name={on ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={on ? 'primary' : 'textMuted'}
+                />
+              </PressableScale>
             );
           })}
         </Section>
@@ -140,18 +175,20 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  days: { minWidth: 100, textAlign: 'center' },
+  stepPressed: { backgroundColor: t.colors.surfacePressed },
+  stepDisabled: { opacity: 0.4 },
+  days: { minWidth: 110, textAlign: 'center', fontVariant: ['tabular-nums'] },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 16,
     backgroundColor: t.colors.surface,
     borderWidth: 1.5,
     borderColor: t.colors.border,
   },
-  itemOn: { borderColor: t.colors.primary },
+  itemOn: { borderColor: t.colors.primary, backgroundColor: t.colors.primarySoft },
   itemEmoji: { fontSize: 20, lineHeight: 26 },
   footer: {
     padding: 16,

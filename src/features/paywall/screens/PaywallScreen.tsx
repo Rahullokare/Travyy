@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { notify } from '@/shared/lib/platform';
+import { View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { haptics, notify } from '@/shared/lib/platform';
 import { makeStyles } from '@/shared/theme';
-import { Button, Icon, IconButton, ScreenScroll, Text, type IconName } from '@/shared/ui';
+import { Button, Icon, IconButton, PressableScale, ScreenScroll, Text, type IconName } from '@/shared/ui';
 import { useAppStore } from '@/store';
 import { FREE_LIMITS } from '../entitlements';
 
@@ -39,19 +39,21 @@ const PERKS: { icon: IconName; title: string; sub: string }[] = [
 
 export function PaywallScreen() {
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
   const [plan, setPlan] = useState<PlanId>('yearly');
   const setPro = useAppStore((s) => s.setPro);
 
   const purchase = () => {
     // TODO(billing): replace with RevenueCat purchasePackage + entitlement check (see docs/ARCHITECTURE.md).
     setPro(true);
+    haptics.success();
     notify('Welcome to Pro ✨', 'Demo mode: Pro is unlocked on this device only.');
     router.back();
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.close}>
+      <View style={[styles.close, { top: insets.top + 8 }]}>
         <IconButton icon="close" size={26} accessibilityLabel="Close" onPress={() => router.back()} />
       </View>
       <ScreenScroll contentStyle={styles.content}>
@@ -78,9 +80,13 @@ export function PaywallScreen() {
           {PLANS.map((p) => {
             const on = plan === p.id;
             return (
-              <Pressable
+              <PressableScale
                 key={p.id}
-                onPress={() => setPlan(p.id)}
+                scale={0.98}
+                onPress={() => {
+                  if (!on) haptics.selection();
+                  setPlan(p.id);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: on }}
                 style={[styles.plan, on && styles.planOn]}
@@ -95,9 +101,11 @@ export function PaywallScreen() {
                 </View>
                 <View style={styles.priceCol}>
                   {'badge' in p ? <Text style={styles.badge}>{p.badge}</Text> : null}
-                  <Text variant="bodyStrong">{p.price}</Text>
+                  <Text variant="bodyStrong" style={styles.tabular}>
+                    {p.price}
+                  </Text>
                 </View>
-              </Pressable>
+              </PressableScale>
             );
           })}
         </View>
@@ -116,7 +124,8 @@ const useStyles = makeStyles((t) => ({
   safe: { flex: 1, backgroundColor: t.colors.background },
   flex: { flex: 1 },
   gap: { gap: 12 },
-  close: { position: 'absolute', top: 48, right: 16, zIndex: 2 },
+  close: { position: 'absolute', right: 16, zIndex: 2 },
+  tabular: { fontVariant: ['tabular-nums'] },
   content: { paddingTop: 32 },
   emoji: { fontSize: 56, lineHeight: 68 },
   perk: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -134,7 +143,7 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1.5,
     borderColor: t.colors.border,
     backgroundColor: t.colors.surface,

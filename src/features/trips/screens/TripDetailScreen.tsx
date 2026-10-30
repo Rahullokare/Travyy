@@ -5,7 +5,7 @@ import type { Place } from '@/domain/models';
 import { CATEGORY_META } from '@/features/places/categories';
 import { PlaceRow } from '@/features/places/components/PlaceRow';
 import { formatDistance, totalRouteMeters, walkingMinutes } from '@/shared/lib/geo';
-import { confirm, openWalkingDirections, shareText } from '@/shared/lib/platform';
+import { confirm, haptics, openWalkingDirections, shareText } from '@/shared/lib/platform';
 import { useLayout } from '@/shared/lib/useLayout';
 import { Map, type MapMarker } from '@/shared/map';
 import { CONTENT_MAX_WIDTH, makeStyles } from '@/shared/theme';
@@ -71,16 +71,19 @@ export function TripDetailScreen({ id }: { id: string }) {
               label={`Day ${d.day}`}
               selected={i === dayIndex}
               color={DAY_COLORS[i % DAY_COLORS.length]}
-              onPress={() => setDay(i)}
+              onPress={() => {
+                if (i !== dayIndex) haptics.selection();
+                setDay(i);
+              }}
             />
           ))}
         </ChipRow>
       </View>
       <View style={styles.summary}>
         <Text variant="heading">
-          Day {dayIndex + 1} · {stops.length} stops
+          Day {dayIndex + 1} · {stops.length} stop{stops.length === 1 ? '' : 's'}
         </Text>
-        <Text variant="caption">
+        <Text variant="caption" style={styles.tabular}>
           {stops.length > 1
             ? `${formatDistance(meters)} · ~${walkingMinutes(meters)} min walking between stops`
             : 'One easy stop'}
@@ -157,5 +160,6 @@ const useStyles = makeStyles((t) => ({
   itinerary: { paddingBottom: 32, width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
   days: { paddingVertical: 16 },
   summary: { paddingHorizontal: 16, gap: 4, paddingBottom: 8 },
+  tabular: { fontVariant: ['tabular-nums'] },
   actions: { padding: 16, gap: 8 },
 }));

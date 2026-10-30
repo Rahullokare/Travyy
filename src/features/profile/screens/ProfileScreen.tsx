@@ -106,7 +106,7 @@ function Stat({ n, label }: { n: number; label: string }) {
   const styles = useStyles();
   return (
     <Card style={styles.stat}>
-      <Text style={styles.statNumber}>{n}</Text>
+      <Text variant="stat">{n}</Text>
       <Text variant="caption">{label}</Text>
     </Card>
   );
@@ -114,11 +114,21 @@ function Stat({ n, label }: { n: number; label: string }) {
 
 const useStyles = makeStyles((t) => ({
   gap: { gap: 8 },
-  hero: { backgroundColor: t.colors.surfaceInverse, borderColor: t.colors.surfaceInverse, gap: 8 },
-  big: { fontSize: 56, lineHeight: 64, fontWeight: '900', letterSpacing: -2 },
-  bar: { height: 8, borderRadius: 4, backgroundColor: t.dark ? '#D6D0C6' : '#3A342C', overflow: 'hidden' },
-  barFill: { height: 8, backgroundColor: t.colors.primary },
+  hero: {
+    backgroundColor: t.colors.surfaceInverse,
+    borderColor: t.colors.surfaceInverse,
+    borderRadius: 24,
+    padding: 20,
+    gap: 10,
+  },
+  big: { fontSize: 64, lineHeight: 68, fontWeight: '900', letterSpacing: -3, fontVariant: ['tabular-nums'] },
+  bar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: t.dark ? 'rgba(22,19,15,0.14)' : 'rgba(255,248,238,0.16)',
+    overflow: 'hidden',
+  },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: t.colors.primary },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  stat: { flexGrow: 1, flexBasis: '40%' },
-  statNumber: { fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  stat: { flexGrow: 1, flexBasis: '40%', gap: 2 },
 }));

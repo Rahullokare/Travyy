@@ -5,7 +5,7 @@ import { TextInput, View } from 'react-native';
 import type { Category, Place } from '@/domain/models';
 import { distanceMeters, formatDistance } from '@/shared/lib/geo';
 import { useUserLocation } from '@/shared/lib/useUserLocation';
-import { CONTENT_MAX_WIDTH, makeStyles, useTheme } from '@/shared/theme';
+import { CONTENT_MAX_WIDTH, lift, makeStyles, useTheme } from '@/shared/theme';
 import { Button, Chip, ChipRow, EmptyState, Icon, IconButton, Screen, Text } from '@/shared/ui';
 import { groupByCity, useAppStore } from '@/store';
 import { CATEGORIES, CATEGORY_META } from '../categories';
@@ -18,7 +18,8 @@ type Row =
 
 export function SavesScreen() {
   const styles = useStyles();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
+  const [searchFocused, setSearchFocused] = useState(false);
   const places = useAppStore((s) => s.places);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<Category>();
@@ -61,7 +62,7 @@ export function SavesScreen() {
 
   const header = (
     <View style={styles.header}>
-      <View style={styles.search}>
+      <View style={[styles.search, lift(dark), searchFocused && styles.searchFocused]}>
         <Icon name="search" size={18} color="textMuted" />
         <TextInput
           value={query}
@@ -71,7 +72,18 @@ export function SavesScreen() {
           accessibilityLabel="Search saves"
           style={styles.searchInput}
           returnKeyType="search"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
         />
+        {query ? (
+          <IconButton
+            icon="close-circle"
+            size={18}
+            color="textMuted"
+            accessibilityLabel="Clear search"
+            onPress={() => setQuery('')}
+          />
+        ) : null}
       </View>
       <ChipRow>
         <Chip
@@ -135,7 +147,9 @@ export function SavesScreen() {
             item.type === 'header' ? (
               <View style={[styles.column, styles.sectionHeader]}>
                 <Text variant="heading">{item.title}</Text>
-                <Text variant="caption">{item.subtitle}</Text>
+                <Text variant="caption" style={styles.tabular}>
+                  {item.subtitle}
+                </Text>
               </View>
             ) : (
               <View style={styles.column}>
@@ -179,15 +193,17 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: 16,
     height: 46,
   },
-  searchInput: { flex: 1, fontSize: 16, color: t.colors.text, height: '100%' },
+  searchFocused: { borderColor: t.colors.primary },
+  searchInput: { flex: 1, fontSize: 16, color: t.colors.text, height: '100%', outlineWidth: 0 },
+  tabular: { fontVariant: ['tabular-nums'] },
   column: { width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 4,
+    paddingTop: 28,
+    paddingBottom: 6,
   },
   listContent: { paddingBottom: 32 },
 }));

@@ -62,7 +62,7 @@ export const lightTheme: Theme = {
     textMuted: palette.stone500,
     textInverse: palette.white,
     textInverseMuted: '#D6D0C6',
-    border: palette.sand200,
+    border: 'rgba(22,19,15,0.09)',
     primary: palette.coral500,
     primaryPressed: palette.coral600,
     primarySoft: palette.coral100,
@@ -87,7 +87,7 @@ export const darkTheme: Theme = {
     textMuted: palette.stone400,
     textInverse: palette.ink900,
     textInverseMuted: palette.stone500,
-    border: palette.ink600,
+    border: 'rgba(255,248,238,0.10)',
     primary: palette.coral500,
     primaryPressed: palette.coral600,
     primarySoft: palette.coral900,
@@ -108,24 +108,52 @@ export const radius = { sm: 10, md: 16, lg: 24, pill: 999 } as const;
 export const CONTENT_MAX_WIDTH = 720;
 
 export const typography = {
-  hero: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },
-  heading: { fontSize: 18, fontWeight: '700' },
+  hero: { fontSize: 32, lineHeight: 36, fontWeight: '800', letterSpacing: -1 },
+  title: { fontSize: 24, lineHeight: 29, fontWeight: '800', letterSpacing: -0.6 },
+  heading: { fontSize: 18, lineHeight: 23, fontWeight: '700', letterSpacing: -0.25 },
   body: { fontSize: 15, lineHeight: 21 },
   bodyStrong: { fontSize: 15, lineHeight: 21, fontWeight: '700' },
   caption: { fontSize: 13, lineHeight: 18 },
   label: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  /** Big numbers. Tabular figures so counts don't jitter as they change. */
+  stat: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    fontVariant: ['tabular-nums'],
+  },
 } as const;
 
+/** Floating layers (map overlays, FABs): a tight contact shadow plus a soft ambient one. */
 export function elevation(dark: boolean) {
   return Platform.select({
-    web: { boxShadow: dark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.10)' },
+    web: {
+      boxShadow: dark
+        ? '0 1px 2px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.45)'
+        : '0 1px 2px rgba(22,19,15,0.06), 0 8px 24px rgba(22,19,15,0.10)',
+    },
     default: {
-      shadowColor: '#000',
-      shadowOpacity: dark ? 0.4 : 0.08,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
+      shadowColor: '#16130F',
+      shadowOpacity: dark ? 0.45 : 0.12,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
+    },
+  });
+}
+
+/** Resting cards: barely lifted, so the hairline border does most of the work. */
+export function lift(dark: boolean) {
+  if (dark) return undefined;
+  return Platform.select({
+    web: { boxShadow: '0 1px 2px rgba(22,19,15,0.04), 0 2px 8px rgba(22,19,15,0.04)' },
+    default: {
+      shadowColor: '#16130F',
+      shadowOpacity: 0.05,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 1,
     },
   });
 }

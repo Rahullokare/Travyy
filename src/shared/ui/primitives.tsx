@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import {
-  Pressable,
   ScrollView,
   TextInput,
   View,
@@ -13,11 +12,13 @@ import {
 import {
   CONTENT_MAX_WIDTH,
   elevation,
+  lift,
   makeStyles,
   spacing,
   useTheme,
   type ThemeColors,
 } from '@/shared/theme';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -53,19 +54,17 @@ export function IconButton({
   const styles = useStyles();
   const { dark } = useTheme();
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      hitSlop={8}
-      style={({ pressed }) => [
-        styles.iconButton,
-        variant === 'floating' && [styles.floating, elevation(dark)],
-        pressed && { opacity: 0.6 },
-      ]}
+      hitSlop={variant === 'plain' ? 10 : 4}
+      scale={variant === 'plain' ? 0.9 : 0.95}
+      style={[styles.iconButton, variant === 'floating' && [styles.floating, elevation(dark)]]}
+      pressedStyle={variant === 'plain' ? styles.iconPressed : styles.floatingPressed}
     >
       <Icon name={icon} size={size} color={color} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -85,11 +84,13 @@ export function Chip({
   const { colors } = useTheme();
   const activeBg = color ?? colors.surfaceInverse;
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
+      scale={0.95}
       style={[styles.chip, selected && { backgroundColor: activeBg, borderColor: activeBg }]}
+      pressedStyle={!selected && styles.chipPressed}
     >
       <Text
         variant="caption"
@@ -97,7 +98,7 @@ export function Chip({
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -120,7 +121,8 @@ export function ChipRow({ children, inset = spacing.lg }: { children: ReactNode;
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const styles = useStyles();
-  return <View style={[styles.card, style]}>{children}</View>;
+  const { dark } = useTheme();
+  return <View style={[styles.card, lift(dark), style]}>{children}</View>;
 }
 
 export function EmptyState({
@@ -137,21 +139,24 @@ export function EmptyState({
   const styles = useStyles();
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyEmoji}>{emoji}</Text>
+      <View style={styles.emptyBadge}>
+        <Text style={styles.emptyEmoji}>{emoji}</Text>
+      </View>
       <Text variant="heading" align="center">
         {title}
       </Text>
       <Text variant="caption" align="center" style={styles.emptyBody}>
         {body}
       </Text>
-      {action}
+      {action ? <View style={styles.emptyAction}>{action}</View> : null}
     </View>
   );
 }
 
-export function TextField({ label, style, ...props }: TextInputProps & { label?: string }) {
+export function TextField({ label, style, onFocus, onBlur, ...props }: TextInputProps & { label?: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       {label ? <Text variant="label">{label}</Text> : null}
@@ -159,7 +164,20 @@ export function TextField({ label, style, ...props }: TextInputProps & { label?:
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={label ?? props.placeholder}
         {...props}
-        style={[styles.input, props.multiline && styles.inputMultiline, style]}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
+        style={[
+          styles.input,
+          props.multiline && styles.inputMultiline,
+          focused && styles.inputFocused,
+          style,
+        ]}
       />
     </View>
   );
@@ -198,13 +216,15 @@ export function Section({ title, children }: { title: string; children: ReactNod
 }
 
 const useStyles = makeStyles((t) => ({
-  iconButton: { padding: 4, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { padding: 4, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: { backgroundColor: t.colors.surfacePressed },
   floating: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: t.colors.surface,
   },
+  floatingPressed: { backgroundColor: t.colors.surfacePressed },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -213,7 +233,8 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border,
     backgroundColor: t.colors.surface,
   },
-  chipLabel: { fontWeight: '600', fontSize: 14 },
+  chipPressed: { backgroundColor: t.colors.surfacePressed },
+  chipLabel: { fontWeight: '600', fontSize: 14, letterSpacing: -0.1 },
   card: {
     backgroundColor: t.colors.surface,
     borderRadius: 16,
@@ -228,8 +249,18 @@ const useStyles = makeStyles((t) => ({
     padding: spacing.xxl,
     flexGrow: 1,
   },
-  emptyEmoji: { fontSize: 48, lineHeight: 58 },
+  emptyBadge: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: t.colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  emptyEmoji: { fontSize: 40, lineHeight: 50 },
   emptyBody: { maxWidth: 300 },
+  emptyAction: { marginTop: spacing.sm, alignSelf: 'stretch', maxWidth: 320, width: '100%' },
   field: { gap: spacing.sm },
   input: {
     backgroundColor: t.colors.surface,
@@ -242,6 +273,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text,
   },
   inputMultiline: { minHeight: 140, paddingTop: spacing.md, textAlignVertical: 'top' },
+  inputFocused: { borderColor: t.colors.primary },
   screen: { flex: 1, backgroundColor: t.colors.background },
   content: {
     width: '100%',

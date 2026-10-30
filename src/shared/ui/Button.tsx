@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
-import { haptics } from '@/shared/lib/platform';
+import { ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native';
 import { makeStyles, useTheme } from '@/shared/theme';
+import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
@@ -33,36 +33,32 @@ export function Button({
   const { colors } = useTheme();
   const isDisabled = disabled || loading;
   return (
-    <Pressable
+    <PressableScale
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
       disabled={isDisabled}
-      onPress={() => {
-        haptics.selection();
-        onPress();
-      }}
-      style={({ pressed }) => [
-        styles.base,
-        styles[variant],
-        pressed && (variant === 'primary' ? styles.primaryPressed : styles.pressed),
-        isDisabled && styles.disabled,
-        style,
-      ]}
+      onPress={onPress}
+      style={[styles.base, styles[variant], isDisabled && styles.disabled, style]}
+      pressedStyle={variant === 'primary' ? styles.primaryPressed : styles.pressed}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.onPrimary : colors.primary} />
       ) : (
         <View style={styles.row}>
           {icon}
-          <Text variant="bodyStrong" style={[styles.label, variant === 'primary' && styles.labelPrimary]}>
+          <Text
+            variant="bodyStrong"
+            numberOfLines={1}
+            style={[styles.label, variant === 'primary' && styles.labelPrimary]}
+          >
             {title}
           </Text>
         </View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -70,7 +66,7 @@ const useStyles = makeStyles((t) => ({
   base: {
     minHeight: 52,
     borderRadius: 999,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -79,8 +75,8 @@ const useStyles = makeStyles((t) => ({
   secondary: { backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border },
   ghost: { backgroundColor: 'transparent' },
   pressed: { backgroundColor: t.colors.surfacePressed },
-  disabled: { opacity: 0.5 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  label: { fontSize: 16, color: t.colors.text },
+  disabled: { opacity: 0.45 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
+  label: { fontSize: 16, color: t.colors.text, letterSpacing: -0.2, flexShrink: 1 },
   labelPrimary: { color: t.colors.onPrimary },
 }));

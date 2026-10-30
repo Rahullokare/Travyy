@@ -1,4 +1,6 @@
 export { Button, type ButtonProps } from './Button';
+export { duration, EASE_OUT, useEntrance } from './motion';
+export { PressableScale, type PressableScaleProps } from './PressableScale';
 export {
   Card,
   Chip,

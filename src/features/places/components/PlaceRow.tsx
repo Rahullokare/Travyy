@@ -59,8 +59,8 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: 16,
   },
   rowActive: { backgroundColor: t.colors.surfacePressed },
-  badge: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  badge: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   emoji: { fontSize: 22, lineHeight: 28 },
-  index: { fontSize: 18, fontWeight: '800' },
+  index: { fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   body: { flex: 1, gap: 2 },
 }));
