@@ -62,6 +62,11 @@ describe('caption parsing strategies', () => {
     );
   });
 
+  it('unescapes slashes in JSON nested inside a JSON string', () => {
+    const html = `<script>s.handle({"contextJSON":"{\\"caption\\":{\\"text\\":\\"\\ud83d\\udccd Krabi: 9\\\\\\/10\\"}}"});</script>`;
+    assert.equal(captionFromEmbeddedJson(html), '📍 Krabi: 9/10');
+  });
+
   it('reads the rendered caption block without username or comments', () => {
     assert.equal(
       captionFromEmbedHtml(HTML_EMBED),

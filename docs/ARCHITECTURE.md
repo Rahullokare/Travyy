@@ -83,6 +83,7 @@ Instagram has no public caption API, and post pages require login. The embed pag
 - **Risks accepted:** it's unofficial. It can break without notice when Instagram changes the page, and automated access may conflict with Instagram's terms.
 - **Guardrails:**
   - public posts only, with no login or cookies
+  - an honest `Travyy/1.0` User-Agent, never a browser's (since 2026-10 Instagram answers a fake desktop-browser User-Agent with an error page, which showed up as `no_post_data` on phones too)
   - 24h cache, plus a 30-min negative cache for failures
   - outbound requests serialised with a gap and an 8s timeout
   - `INSTAGRAM_CAPTIONS=off` turns it off instantly

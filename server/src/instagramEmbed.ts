@@ -24,10 +24,14 @@ export type EmbedFailure = 'login_wall' | 'no_post_data' | 'no_caption';
 
 const MAX_CAPTION = 5_000;
 
-/** Sent with every embed request (server and phone), so Instagram serves both the page the parser expects. */
+/**
+ * Sent with every embed request (server and phone), so Instagram serves both the page the parser expects.
+ * The app identifies itself honestly: since 2026-10 Instagram answers a desktop-browser User-Agent
+ * without a real browser behind it with an error page (`no_post_data`), while plain app clients
+ * still get the embed with its caption.
+ */
 export const EMBED_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
+  'User-Agent': 'Travyy/1.0 (travel saves app)',
   'Accept-Language': 'en-US,en;q=0.9',
   Accept: 'text/html',
 };
@@ -85,10 +89,8 @@ const JSON_PATTERNS = [
 
 /** Caption from JSON embedded in the page, including JSON that is itself inside a string (\"…\"). */
 export function captionFromEmbeddedJson(html: string): string | undefined {
-  const unescapedOnce = html
-    .replace(/\\\\/g, '\u0000')
-    .replace(/\\"/g, '"')
-    .replace(/\u0000/g, '\\');
+  // One pass, so `\\\/` (an escaped slash inside the inner JSON) becomes `\/`, not `\\/`.
+  const unescapedOnce = html.replace(/\\(["\\/])/g, '$1');
   for (const source of [html, unescapedOnce]) {
     for (const pattern of JSON_PATTERNS) {
       const body = source.match(pattern)?.[1];
