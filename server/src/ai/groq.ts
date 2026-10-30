@@ -19,7 +19,8 @@ export function groqExtractor(): PlaceExtractor | undefined {
   if (!key) return undefined;
   return {
     name: 'groq',
-    async extract(caption, url) {
+    vision: false,
+    async extract(input) {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -29,7 +30,7 @@ export function groqExtractor(): PlaceExtractor | undefined {
           temperature: 0.2,
           messages: [
             { role: 'system', content: SYSTEM },
-            { role: 'user', content: userPrompt(caption, url) },
+            { role: 'user', content: userPrompt(input) },
           ],
           response_format: {
             type: 'json_schema',

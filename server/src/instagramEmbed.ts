@@ -1,5 +1,5 @@
 /**
- * Reading a caption from Instagram's embed page — shared by the API (`instagram.ts`) and the
+ * Reading a caption (plus cover image and location tag) from Instagram's embed page — shared by the API (`instagram.ts`) and the
  * app (`src/features/capture/api/instagram.ts`), so both request and parse it the same way.
  *
  * Pure functions with no imports and no Node or React Native APIs: both TypeScript projects
@@ -151,6 +151,49 @@ export function parseEmbedPage(html: string): InstagramCaption | undefined {
     if (text) return { text: text.slice(0, MAX_CAPTION), source };
   }
   return undefined;
+}
+
+/** The post's cover image (for reels, the video's poster frame): post JSON, then the rendered image, then og:image. */
+export function imageFromEmbedPage(html: string): string | undefined {
+  const unescapedOnce = html.replace(/\\(["\\/])/g, '$1');
+  for (const source of [html, unescapedOnce]) {
+    for (const pattern of [
+      /"display_url"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+      /"thumbnail_src"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+    ]) {
+      const body = source.match(pattern)?.[1];
+      const url = body !== undefined ? decodeJsonString(body) : undefined;
+      if (url?.startsWith('https://')) return url;
+    }
+  }
+  const img = html.match(/<img[^>]*class="[^"]*\bEmbeddedMediaImage\b[^"]*"[^>]*>/)?.[0];
+  const src = img?.match(/\ssrc="([^"]+)"/)?.[1];
+  if (src?.startsWith('https://')) return decodeHtmlEntities(src);
+  const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
+  return og?.startsWith('https://') ? decodeHtmlEntities(og) : undefined;
+}
+
+/** The post's location tag ("Cervejaria Ramiro"), when the creator added one. Only the post JSON carries it. */
+export function locationFromEmbedPage(html: string): string | undefined {
+  const unescapedOnce = html.replace(/\\(["\\/])/g, '$1');
+  for (const source of [html, unescapedOnce]) {
+    const body = source.match(/"location"\s*:\s*\{[^{}]*?"name"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1];
+    const name = body !== undefined ? decodeJsonString(body)?.trim() : undefined;
+    if (name) return name;
+  }
+  return undefined;
+}
+
+/**
+ * Add the location tag to the caption as a "📍 Name" line, the convention both the AI prompt
+ * and the phone's caption rules already read. Skipped when the caption already names it.
+ */
+export function withLocationTag(
+  caption: string | undefined,
+  location: string | undefined,
+): string | undefined {
+  if (!location || caption?.toLowerCase().includes(location.toLowerCase())) return caption;
+  return [caption, `📍 ${location}`].filter(Boolean).join('\n\n');
 }
 
 // Present when the page rendered a post at all (media, caption block or post JSON).

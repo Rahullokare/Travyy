@@ -8,7 +8,15 @@ export function claudeExtractor(): PlaceExtractor | undefined {
   const client = new Anthropic();
   return {
     name: 'claude',
-    async extract(caption, url) {
+    vision: true,
+    async extract(input) {
+      const content: Anthropic.Beta.BetaContentBlockParam[] = [{ type: 'text', text: userPrompt(input) }];
+      if (input.image) {
+        content.unshift({
+          type: 'image',
+          source: { type: 'base64', media_type: input.image.mimeType, data: input.image.data },
+        });
+      }
       try {
         const response = await client.beta.messages.parse({
           model: 'claude-opus-5-5',
@@ -19,7 +27,7 @@ export function claudeExtractor(): PlaceExtractor | undefined {
           // Simple extraction: low effort keeps latency and cost down.
           output_config: { effort: 'low', format: betaZodOutputFormat(ExtractionSchema) },
           system: SYSTEM,
-          messages: [{ role: 'user', content: userPrompt(caption, url) }],
+          messages: [{ role: 'user', content }],
         });
         if (response.stop_reason === 'refusal') return [];
         return response.parsed_output?.places ?? [];

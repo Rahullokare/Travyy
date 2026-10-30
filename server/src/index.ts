@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { AiBusyError, configuredExtractors, extractPlaces } from './extract.ts';
+import { AiBusyError, configuredExtractors, extractFromPost } from './extract.ts';
+import { isTrustedImageHost } from './images.ts';
 import { fetchCaption, geocode } from './sources.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -16,6 +17,8 @@ const HttpUrl = z.url({ protocol: /^https?$/ });
 const ExtractRequest = z.object({
   url: HttpUrl.optional(),
   text: z.string().max(8000).optional(),
+  /** The post's cover image, when the phone read it (Instagram blocks the server). Instagram/TikTok/YouTube CDNs only. */
+  imageUrl: HttpUrl.optional(),
 });
 const CaptionRequest = z.object({ url: HttpUrl });
 
@@ -109,6 +112,7 @@ async function lookupCaption(url: string) {
     host: new URL(url).hostname,
     source: found.source,
     chars: found.text?.length ?? 0,
+    image: !!found.imageUrl,
     ms: Date.now() - started,
     ...found.detail,
   });
@@ -130,11 +134,18 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
 
   const fetched = url && (!text || text.length < SHORT_TEXT) ? await lookupCaption(url) : undefined;
   const caption = [text, fetched?.text].filter(Boolean).join('\n').trim();
-  if (!caption) return send(req, res, 200, { caption: null, places: [] });
+  const sentImage = body.imageUrl && isTrustedImageHost(body.imageUrl) ? body.imageUrl : undefined;
+  const imageUrl = sentImage ?? fetched?.imageUrl;
+  if (!caption && !imageUrl) return send(req, res, 200, { caption: null, places: [] });
 
   const started = Date.now();
   try {
-    const { places: extracted, provider, failures } = await extractPlaces(EXTRACTORS, caption, url);
+    const {
+      places: extracted,
+      provider,
+      failures,
+      usedImage,
+    } = await extractFromPost(EXTRACTORS, { caption, url, imageUrl });
     for (const f of failures) log('warn', 'ai_provider_failed', f);
     const places = [];
     for (const p of extracted.slice(0, 15)) {
@@ -152,11 +163,12 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
     }
     log('info', 'extract', {
       provider,
+      usedImage,
       found: places.length,
       located: places.filter((p) => p.lat).length,
       ms: Date.now() - started,
     });
-    return send(req, res, 200, { caption, places });
+    return send(req, res, 200, { caption: caption || null, places });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     if (e instanceof AiBusyError) {

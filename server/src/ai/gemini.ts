@@ -39,7 +39,10 @@ export function geminiExtractor(): PlaceExtractor | undefined {
   if (!key) return undefined;
   return {
     name: 'gemini',
-    async extract(caption, url) {
+    vision: true,
+    async extract(input) {
+      const parts: object[] = [{ text: userPrompt(input) }];
+      if (input.image) parts.unshift({ inlineData: input.image });
       const r = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
         {
@@ -48,7 +51,7 @@ export function geminiExtractor(): PlaceExtractor | undefined {
           signal: AbortSignal.timeout(30_000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SYSTEM }] },
-            contents: [{ role: 'user', parts: [{ text: userPrompt(caption, url) }] }],
+            contents: [{ role: 'user', parts }],
             generationConfig: {
               temperature: 0.2,
               responseMimeType: 'application/json',

@@ -16,9 +16,11 @@ import {
   diagnoseEmbedPage,
   EMBED_HEADERS,
   embedUrl,
+  imageFromEmbedPage,
   instagramShortcode,
   isInstagramUrl,
   isShareLink,
+  locationFromEmbedPage,
   parseEmbedPage,
   type EmbedFailure,
   type InstagramCaption,
@@ -39,6 +41,9 @@ export type LookupOutcome =
 
 export interface InstagramLookup {
   caption?: InstagramCaption;
+  /** Cover image and location tag, found even when the post has no caption. */
+  imageUrl?: string;
+  location?: string;
   outcome: LookupOutcome;
   /** HTTP status and page size of the embed request, when one was made. */
   status?: number;
@@ -118,6 +123,8 @@ async function fetchEmbed(shortcode: string, fetcher: Fetcher): Promise<Instagra
     const caption = parseEmbedPage(html);
     return {
       caption,
+      imageUrl: imageFromEmbedPage(html),
+      location: locationFromEmbedPage(html),
       outcome: caption ? 'ok' : diagnoseEmbedPage(html, res.url),
       status: res.status,
       bytes: html.length,

@@ -90,7 +90,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8787 npm start
 
 | Endpoint | Body | Returns |
 |---|---|---|
-| `POST /extract` | `{ "url"?, "text"? }` | `{ caption, places: Candidate[] }`. Reads the caption, then extracts places with the first AI provider that answers. Returns 503 when no AI key is set, 429 when every provider is rate-limited |
+| `POST /extract` | `{ "url"?, "text"?, "imageUrl"? }` | `{ caption, places: Candidate[] }`. Reads the caption and cover image, then extracts places with the first AI provider that answers. The cover is sent to the AI only when the caption is short or finds nothing. `imageUrl` is the cover the phone read (Instagram/TikTok/YouTube CDNs only). Returns 503 when no AI key is set, 429 when every provider is rate-limited |
 | `POST /caption` | `{ "url" }` | `{ caption, source }`. Caption only, no AI needed |
 | `GET /health` | | `{ ok: true, ai }`. `ai` says whether `/extract` is available; the app remembers it and skips `/extract` when it isn't |
 

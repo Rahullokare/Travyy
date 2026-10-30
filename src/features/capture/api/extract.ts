@@ -65,7 +65,7 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
   // still fetch the real one. A long pasted caption is used as-is.
   const wantsCaption = !!url && (!typed || typed.length < SHORT_TEXT);
   const fetched = wantsCaption ? await fetchCaption(url, platform, signal) : undefined;
-  let caption = [typed, fetched].filter(Boolean).join('\n').trim() || undefined;
+  let caption = [typed, fetched?.text].filter(Boolean).join('\n').trim() || undefined;
 
   if (env.apiUrl) {
     // Skip a server known to have no AI (the free setup): waking it would only get a 503.
@@ -75,7 +75,8 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
           await fetchJson(`${env.apiUrl}/extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, text: caption }),
+            // The cover lets the AI read place names shown on it when the caption is weak.
+            body: JSON.stringify({ url, text: caption, imageUrl: fetched?.imageUrl }),
             // Cold start on free hosting (≤60 s) + AI extraction.
             timeoutMs: 90_000,
             signal,
@@ -96,7 +97,7 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
     }
     // The device couldn't read the caption (Instagram, or any link on web): the server
     // can, even when AI extraction is unavailable. Then the on-device rules take over.
-    if (wantsCaption && !fetched) {
+    if (wantsCaption && !fetched?.text) {
       const serverCaption = await fetchServerCaption(env.apiUrl, url!, signal);
       if (serverCaption) caption = [typed, serverCaption].filter(Boolean).join('\n').trim();
     }

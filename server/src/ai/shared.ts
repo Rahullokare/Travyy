@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ImageData } from '../images.ts';
 
 export const CATEGORIES = [
   'food',
@@ -34,16 +35,32 @@ Return every specific, visitable place the post recommends or shows: restaurants
 - Infer city and country from context (hashtags, the title, other places) when not stated per place.
 - Skip creators' own handles, generic areas used only as hashtags, brands that are not a location, and calls to action.
 - Score confidence lower when the name is ambiguous or you are guessing from a handle.
+- When the post's cover image is attached, also read place names written on it (text overlays, signs, pins). Name a place from the scenery alone only for an unmistakable landmark.
 If the post mentions no specific places, return an empty list.`;
 
-export function userPrompt(caption: string, url?: string): string {
-  return `${url ? `Post URL: ${url}\n` : ''}Post text:\n"""\n${caption}\n"""`;
+/** What a provider gets: the post's text and, when the text is weak, its cover image. */
+export interface ExtractionInput {
+  caption: string;
+  url?: string;
+  image?: ImageData;
+}
+
+export function userPrompt({ caption, url, image }: ExtractionInput): string {
+  return [
+    url && `Post URL: ${url}`,
+    caption ? `Post text:\n"""\n${caption}\n"""` : 'The post has no text.',
+    image && "The post's cover image is attached.",
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /** One AI backend. `extract` throws `ProviderError` (or anything) on failure; the chain moves on. */
 export interface PlaceExtractor {
   name: string;
-  extract(caption: string, url?: string): Promise<ExtractedPlace[]>;
+  /** Reads images. A text-only provider gets the caption alone, and is skipped when there is none. */
+  vision: boolean;
+  extract(input: ExtractionInput): Promise<ExtractedPlace[]>;
 }
 
 export class ProviderError extends Error {

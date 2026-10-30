@@ -1,5 +1,5 @@
 import { fetchInstagramCaption } from './instagram.ts';
-import { decodeHtmlEntities, isInstagramUrl } from './instagramEmbed.ts';
+import { decodeHtmlEntities, isInstagramUrl, withLocationTag } from './instagramEmbed.ts';
 
 const USER_AGENT = process.env.GEOCODER_USER_AGENT ?? 'Travyy/1.0 (contact: set GEOCODER_USER_AGENT)';
 
@@ -13,6 +13,8 @@ async function get(url: string, ms = 10_000): Promise<Response> {
 
 export interface CaptionLookup {
   text?: string;
+  /** The post's cover image or thumbnail, for AI extraction when the caption is weak. */
+  imageUrl?: string;
   source: string | null;
   /** Extra `caption_lookup` log fields: outcome, HTTP status, page size. Never caption text. */
   detail?: Record<string, string | number | boolean | undefined>;
@@ -20,13 +22,15 @@ export interface CaptionLookup {
 
 /**
  * Public caption lookup: oEmbed for TikTok/YouTube, the embed page for Instagram
- * (see instagram.ts), Open Graph tags for anything else.
+ * (see instagram.ts), Open Graph tags for anything else. An Instagram location tag is
+ * added to the text as a "📍 Name" line.
  */
 export async function fetchCaption(url: string): Promise<CaptionLookup> {
   try {
     if (isInstagramUrl(url)) {
-      const { caption, ...detail } = await fetchInstagramCaption(url);
-      return { text: caption?.text, source: caption?.source ?? null, detail };
+      const { caption, imageUrl, location, ...detail } = await fetchInstagramCaption(url);
+      const text = withLocationTag(caption?.text, location);
+      return { text, imageUrl, source: caption?.source ?? (location ? 'embed-location' : null), detail };
     }
     const host = new URL(url).hostname;
     const oembed = host.endsWith('tiktok.com')
@@ -36,8 +40,9 @@ export async function fetchCaption(url: string): Promise<CaptionLookup> {
         : undefined;
     if (oembed) {
       const r = await get(oembed[1]);
-      const title = r.ok ? ((await r.json()) as { title?: string }).title?.trim() : undefined;
-      if (title) return { text: title, source: oembed[0] };
+      const body = r.ok ? ((await r.json()) as { title?: string; thumbnail_url?: string }) : {};
+      const title = body.title?.trim();
+      if (title) return { text: title, imageUrl: body.thumbnail_url, source: oembed[0] };
     }
     const r = await get(url);
     if (!r.ok) return { source: null, detail: { outcome: `http_${r.status}`, status: r.status } };
@@ -50,7 +55,11 @@ export async function fetchCaption(url: string): Promise<CaptionLookup> {
       .filter(Boolean)
       .map((t) => decodeHtmlEntities(t!))
       .join('\n');
-    return text ? { text, source: 'open-graph' } : { source: null, detail: { outcome: 'no_caption' } };
+    const image = meta('og:image');
+    const imageUrl = image?.startsWith('https://') ? decodeHtmlEntities(image) : undefined;
+    return text
+      ? { text, imageUrl, source: 'open-graph' }
+      : { imageUrl, source: null, detail: { outcome: 'no_caption' } };
   } catch {
     return { source: null, detail: { outcome: 'network_error' } };
   }

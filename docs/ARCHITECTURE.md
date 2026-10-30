@@ -117,7 +117,8 @@ The API runs on Render's free web service, defined in `render.yaml` (Node runtim
 - **An empty list is an answer**, not a failure: a caption with no places shouldn't use up the next provider's quota.
 - **Busy means 429:** when every provider failed and at least one was rate-limited, `/extract` answers 429. Not 503, which the app reads as "this server has no AI" and remembers.
 - **Privacy:** Google may use Gemini free-tier requests to improve its products. Captions come from public posts, but the privacy policy has to say so. A paid tier removes this.
-- **Next:** the same chain is where images and video go (cover images, screenshots, YouTube links), since Gemini accepts them directly.
+- **Cover images** *(added 2026-10-30)*: many reels name their places only on screen. Caption lookups also return the post's cover (oEmbed `thumbnail_url`, Instagram's `display_url`, `og:image`), and an Instagram location tag is added to the caption as a "📍 Name" line, which the phone's rules read too. The phone reads Instagram's embed page, which the server usually can't, so it sends the cover as `imageUrl`; the server accepts that only from Instagram, TikTok and YouTube CDN hosts (`images.ts`), so callers can't make it fetch arbitrary URLs. To save free image quota, a caption under 200 characters goes with the cover, and a longer one goes alone, retried with the cover only if it finds nothing. Providers marked `vision: false` (Groq) get the caption alone and are skipped when there is no caption.
+- **Next:** video (YouTube links first, which Gemini reads directly) goes through the same chain.
 
 ## Quality gates
 

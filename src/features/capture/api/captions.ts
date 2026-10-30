@@ -2,9 +2,15 @@ import { Platform } from 'react-native';
 import { z } from 'zod';
 import type { SourcePlatform } from '@/domain/models';
 import { fetchWithTimeout } from '@/shared/lib/http';
-import { readInstagramCaption } from './instagram';
+import { readInstagramPost } from './instagram';
 
-const OEmbedSchema = z.object({ title: z.string().optional() });
+const OEmbedSchema = z.object({ title: z.string().optional(), thumbnail_url: z.string().optional() });
+
+/** What the device found for a post: its caption and cover image (sent to the API for AI extraction). */
+export interface CaptionLookup {
+  text?: string;
+  imageUrl?: string;
+}
 /** Contract of POST /caption on the Travyy API (server/src/index.ts). */
 const ServerCaptionSchema = z.object({ caption: z.string().nullable() });
 
@@ -34,16 +40,16 @@ export async function fetchServerCaption(
 }
 
 /**
- * Best-effort public caption lookup on the device: oEmbed for TikTok/YouTube, the embed
- * page for Instagram, then Open Graph tags. Browsers block most cross-origin requests, so
+ * Best-effort public caption and cover lookup on the device: oEmbed for TikTok/YouTube, the
+ * embed page for Instagram, then Open Graph tags. Browsers block most cross-origin requests, so
  * on web this often returns undefined; the server (`fetchServerCaption`) covers those cases.
  */
 export async function fetchCaption(
   url: string,
   platform: SourcePlatform,
   signal?: AbortSignal,
-): Promise<string | undefined> {
-  if (platform === 'instagram') return readInstagramCaption(url, signal);
+): Promise<CaptionLookup> {
+  if (platform === 'instagram') return readInstagramPost(url, signal);
   try {
     url = await resolveShortLink(url, signal);
     const oembed =
@@ -54,12 +60,15 @@ export async function fetchCaption(
           : undefined;
     if (oembed) {
       const res = await fetchWithTimeout(oembed, { signal });
-      if (res.ok) return OEmbedSchema.parse(await res.json()).title;
+      if (res.ok) {
+        const { title, thumbnail_url } = OEmbedSchema.parse(await res.json());
+        return { text: title, imageUrl: thumbnail_url };
+      }
     }
     // Browsers block cross-origin page requests, so don't spend one on web.
-    if (Platform.OS === 'web') return undefined;
+    if (Platform.OS === 'web') return {};
     const res = await fetchWithTimeout(url, { signal });
-    if (!res.ok) return undefined;
+    if (!res.ok) return {};
     const html = (await res.text()).slice(0, 500_000);
     const meta = (prop: string) =>
       html.match(
@@ -69,9 +78,13 @@ export async function fetchCaption(
       .filter((s): s is string => !!s)
       .map(decodeEntities)
       .join('\n');
-    return text || undefined;
+    const image = meta('og:image');
+    return {
+      text: text || undefined,
+      imageUrl: image?.startsWith('https://') ? decodeEntities(image) : undefined,
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 

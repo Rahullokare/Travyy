@@ -6,8 +6,11 @@ import {
   captionFromEmbeddedJson,
   captionFromMeta,
   diagnoseEmbedPage,
+  imageFromEmbedPage,
   instagramShortcode,
+  locationFromEmbedPage,
   parseEmbedPage,
+  withLocationTag,
 } from './instagramEmbed.ts';
 
 // Fixtures mirror the shapes Instagram's embed page has used. They are hand-built
@@ -99,6 +102,44 @@ describe('caption parsing strategies', () => {
   });
 });
 
+// A reel with no caption: only the cover image and the creator's location tag.
+const MEDIA_JSON_EMBED = `<script>window.__additionalDataLoaded('extra',{"shortcode_media":{"id":"2","display_url":"https:\\/\\/scontent-lis1-1.cdninstagram.com\\/v\\/cover.jpg?stp=dst\\u0026_nc_ht=x","location":{"id":"123","has_public_page":true,"name":"Cervejaria Ramiro","slug":"cervejaria-ramiro"},"edge_media_to_caption":{"edges":[]}}});</script>`;
+
+const MEDIA_HTML_EMBED = `<div class="Embed"><div class="EmbeddedMedia"><img class="EmbeddedMediaImage" alt="" src="https://scontent.cdninstagram.com/v/cover.jpg?a=1&amp;b=2" /></div></div>`;
+
+describe('cover image and location tag', () => {
+  it('reads the cover image from post JSON, the rendered image, then og:image', () => {
+    assert.equal(
+      imageFromEmbedPage(MEDIA_JSON_EMBED),
+      'https://scontent-lis1-1.cdninstagram.com/v/cover.jpg?stp=dst&_nc_ht=x',
+    );
+    assert.equal(
+      imageFromEmbedPage(MEDIA_HTML_EMBED),
+      'https://scontent.cdninstagram.com/v/cover.jpg?a=1&b=2',
+    );
+    assert.equal(
+      imageFromEmbedPage('<meta property="og:image" content="https://scontent.cdninstagram.com/og.jpg" />'),
+      'https://scontent.cdninstagram.com/og.jpg',
+    );
+    assert.equal(imageFromEmbedPage(NO_CAPTION_EMBED), undefined);
+  });
+
+  it('reads the location tag from post JSON', () => {
+    assert.equal(locationFromEmbedPage(MEDIA_JSON_EMBED), 'Cervejaria Ramiro');
+    assert.equal(locationFromEmbedPage(JSON_EMBED), undefined);
+  });
+
+  it('adds the location tag as a pin line unless the caption already names it', () => {
+    assert.equal(
+      withLocationTag('Best seafood ever', 'Cervejaria Ramiro'),
+      'Best seafood ever\n\n📍 Cervejaria Ramiro',
+    );
+    assert.equal(withLocationTag(undefined, 'Cervejaria Ramiro'), '📍 Cervejaria Ramiro');
+    assert.equal(withLocationTag('📍 cervejaria ramiro', 'Cervejaria Ramiro'), '📍 cervejaria ramiro');
+    assert.equal(withLocationTag('caption', undefined), 'caption');
+  });
+});
+
 describe('fetchInstagramCaption', () => {
   beforeEach(() => clearInstagramCache());
 
@@ -146,6 +187,8 @@ describe('fetchInstagramCaption', () => {
     const result = await fetchInstagramCaption('https://www.instagram.com/p/Cshell01/', fetcher);
     assert.deepEqual(result, {
       caption: undefined,
+      imageUrl: undefined,
+      location: undefined,
       outcome: 'no_post_data',
       status: 200,
       bytes: EMPTY_SHELL.length,
