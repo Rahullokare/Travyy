@@ -79,6 +79,9 @@ function RootNavigator() {
           <Stack.Screen name="place/[id]" options={{ title: '' }} />
           <Stack.Screen name="trip/new" options={{ presentation: 'modal', title: 'Plan a trip' }} />
           <Stack.Screen name="trip/[id]" options={{ title: '' }} />
+          <Stack.Screen name="trip/[id]/expense" options={{ presentation: 'modal', title: '' }} />
+          <Stack.Screen name="trip/[id]/people" options={{ presentation: 'modal', title: '' }} />
+          <Stack.Screen name="trip/[id]/payment" options={{ presentation: 'modal', title: '' }} />
         </Stack.Protected>
         <Stack.Protected guard={!onboarded}>
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />

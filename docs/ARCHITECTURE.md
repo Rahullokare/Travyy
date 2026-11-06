@@ -12,6 +12,7 @@ src/
     places/       saved places: list, detail, categories, map markers
     explore/      the map tab
     trips/        trip planner (clustering + routing), trip screens, sharing
+    expenses/     splitting a trip's costs: ledger maths, Money view, expense/people/payment forms
     profile/      stats
     onboarding/   first-run flow + sample data
     paywall/      plans, free-tier limits (entitlements)
@@ -129,6 +130,18 @@ The API runs on Render's free web service, defined in `render.yaml` (Node runtim
 - **Without Supabase config the app has no accounts.** `supabase` is undefined and the account card is hidden, the same "optional service" rule as the API.
 - **The server checks tokens itself:** the project signs access tokens with ES256 and publishes the public keys, so `server/src/auth.ts` verifies them with `node:crypto` (keys cached for 10 minutes) and makes no call to Supabase per request. A missing or invalid token means an anonymous request, never an error. Signed-in requests are rate-limited per account instead of per IP.
 - **Email delivery:** Supabase's built-in email only reaches the project's team members and sends a few emails an hour. Real users need custom SMTP (for example Resend's free tier). The email templates must include `{{ .Token }}` so they send a code rather than only a link.
+
+### 16. Splitting costs: one ledger per trip, on the phone first
+*Decided 2026-11-06.* A trip's shared costs live in `features/expenses` with their own persisted store (`store/ledgerStore.ts`, key `travyy-ledger-v1`). It works offline with no account; group sync comes later.
+- **Separate from `Trip`:** `sanitize` drops any persisted record that fails its schema, so new required `Trip` fields could silently delete existing trips. A ledger keyed by trip id leaves them untouched, and a new expense doesn't rewrite every saved place. `removeTrip` and `reset` clear it too.
+- **Money is integers** in the currency's smallest unit (`domain/money.ts`), with the ISO 4217 decimals per currency. `MAX_AMOUNT_MINOR` keeps `amount * weight` inside safe integer range.
+- **Balances are always derived**, in `ledger.ts`, never stored, so an edit or delete can't leave one stale. The schema drops an expense whose payers or shares don't add up to its amount.
+- **Members are names, not accounts:** friends count without installing anything. Someone with entries can't be removed. `isSelf` marks the phone's owner: the UI says "You", and shared text uses their real name.
+- **One currency per trip,** fixed once there are entries, because nothing is stored to convert with. Multi-currency adds an optional original amount and rate to each expense, leaving `amountMinor` as the trip-currency figure.
+- **Costs link to a stop by `placeId`, with a copy of its name.** Not by day: "Re-shuffle days" renumbers those. The copy keeps the record readable after the place is deleted. The day view looks up today's plan.
+- **Rounding:** leftover units go to the largest remainders; ties rotate per expense, seeded by its id, so nobody absorbs every spare paisa.
+- **Settling up** is greedy: the biggest debtor pays the biggest creditor. Finding the true minimum number of payments is NP-hard. A payment only records what happened; money moves outside the app.
+- **Free:** no paywall here, since people resent caps on this and it's how the app reaches a whole group.
 
 ## Quality gates
 

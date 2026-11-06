@@ -4,7 +4,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { PlaceSchema, TripSchema, type NewPlace, type Place, type Trip } from '@/domain/models';
 import { planTrip } from '@/features/trips/planner';
 import { newId } from '@/shared/lib/id';
-import { logger } from '@/shared/lib/logger';
+import { keepValid } from './keepValid';
+import { useLedgerStore } from './ledgerStore';
 
 /**
  * Local-first app state. AsyncStorage maps to SQLite-backed storage on Android,
@@ -110,10 +111,16 @@ export const useAppStore = create<AppStore>()(
         });
       },
 
-      removeTrip: (id) => set({ trips: get().trips.filter((t) => t.id !== id) }),
+      removeTrip: (id) => {
+        set({ trips: get().trips.filter((t) => t.id !== id) });
+        useLedgerStore.getState().removeLedger(id);
+      },
       completeOnboarding: () => set({ onboarded: true }),
       setPro: (isPro) => set({ isPro }),
-      reset: () => set(initialState),
+      reset: () => {
+        set(initialState);
+        useLedgerStore.getState().reset();
+      },
     }),
     {
       // Keep the original key so existing installs keep their data.
@@ -131,25 +138,22 @@ export const useAppStore = create<AppStore>()(
 export function sanitize(raw: unknown): Partial<AppState> {
   if (!raw || typeof raw !== 'object') return {};
   const state = raw as Record<string, unknown>;
-  const keep = <T>(items: unknown, schema: { safeParse: (v: unknown) => { success: boolean; data?: T } }) => {
-    if (!Array.isArray(items)) return [];
-    const valid: T[] = [];
-    for (const item of items) {
-      const result = schema.safeParse(item);
-      if (result.success) valid.push(result.data as T);
-      else logger.warn('Dropped invalid persisted record', { item });
-    }
-    return valid;
-  };
   return {
-    places: keep<Place>(state.places, PlaceSchema),
-    trips: keep<Trip>(state.trips, TripSchema),
+    places: keepValid<Place>(state.places, PlaceSchema),
+    trips: keepValid<Trip>(state.trips, TripSchema),
     onboarded: state.onboarded === true,
     isPro: state.isPro === true,
   };
 }
 
 export const hydration = {
-  isHydrated: () => useAppStore.persist.hasHydrated(),
-  subscribe: (cb: () => void) => useAppStore.persist.onFinishHydration(cb),
+  isHydrated: () => useAppStore.persist.hasHydrated() && useLedgerStore.persist.hasHydrated(),
+  subscribe: (cb: () => void) => {
+    const offApp = useAppStore.persist.onFinishHydration(cb);
+    const offLedger = useLedgerStore.persist.onFinishHydration(cb);
+    return () => {
+      offApp();
+      offLedger();
+    };
+  },
 };

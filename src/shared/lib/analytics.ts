@@ -1,4 +1,4 @@
-import type { SourcePlatform } from '@/domain/models';
+import type { SourcePlatform, SplitMode } from '@/domain/models';
 
 /**
  * Typed product-analytics events — the activation/retention funnel from docs/RESEARCH.md.
@@ -13,7 +13,11 @@ export type AnalyticsEvent =
   | { name: 'trip_created'; props: { days: number; stops: number } }
   | { name: 'place_visited'; props: { category: string } }
   | { name: 'paywall_viewed'; props: { trigger: string } }
-  | { name: 'signed_in'; props: { method: 'email' | 'google' | 'apple' } };
+  | { name: 'signed_in'; props: { method: 'email' | 'google' | 'apple' } }
+  | { name: 'ledger_created'; props: { people: number; currency: string } }
+  | { name: 'expense_saved'; props: { mode: SplitMode; people: number; onStop: boolean; edited: boolean } }
+  | { name: 'payment_recorded'; props: { suggested: boolean } }
+  | { name: 'money_summary_shared'; props: { expenses: number } };
 
 function send(event: AnalyticsEvent) {
   if (__DEV__) console.log('[analytics]', event.name, event.props);

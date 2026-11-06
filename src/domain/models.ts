@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_AMOUNT_MINOR } from './money';
 
 /**
  * Domain models. Schemas double as runtime validators for anything that crosses a
@@ -74,6 +75,88 @@ export const CandidateSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 export type Candidate = z.infer<typeof CandidateSchema>;
+
+export const EXPENSE_CATEGORIES = ['food', 'transport', 'stay', 'activity', 'shopping', 'other'] as const;
+export const ExpenseCategorySchema = z.enum(EXPENSE_CATEGORIES);
+export type ExpenseCategory = z.infer<typeof ExpenseCategorySchema>;
+
+export const SPLIT_MODES = ['equal', 'exact', 'percent', 'shares'] as const;
+export const SplitModeSchema = z.enum(SPLIT_MODES);
+export type SplitMode = z.infer<typeof SplitModeSchema>;
+
+/** Integer count of the currency's smallest unit. See `domain/money.ts`. */
+const MinorUnits = z.number().int().nonnegative().max(MAX_AMOUNT_MINOR);
+const CalendarDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** Someone on a trip. A name, not an account, so friends count without installing the app. */
+export const MemberSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  /** The person holding this phone. */
+  isSelf: z.boolean().optional(),
+});
+export type Member = z.infer<typeof MemberSchema>;
+
+const MemberAmountSchema = z.object({ memberId: z.string().min(1), amountMinor: MinorUnits });
+export const ExpenseShareSchema = MemberAmountSchema.extend({
+  /** What was entered for this person, kept for editing. Unused by equal splits. */
+  input: z.number().nonnegative().optional(),
+});
+export type ExpenseShare = z.infer<typeof ExpenseShareSchema>;
+
+/** Sums must match exactly: a record that doesn't balance would corrupt everyone's totals. */
+const sumMatches = (rows: { amountMinor: number }[], total: number) =>
+  rows.reduce((s, r) => s + r.amountMinor, 0) === total;
+
+export const ExpenseSchema = z
+  .object({
+    id: z.string().min(1),
+    title: z.string().min(1),
+    category: ExpenseCategorySchema,
+    spentOn: CalendarDay,
+    /** In the trip's currency. */
+    amountMinor: MinorUnits.positive(),
+    payers: z.array(MemberAmountSchema).min(1),
+    splitMode: SplitModeSchema,
+    shares: z.array(ExpenseShareSchema).min(1),
+    /**
+     * The itinerary stop this paid for. The name is a copy so the record still reads right after
+     * the place is deleted, and there's no day number because re-shuffling a trip changes those.
+     */
+    stop: z.object({ placeId: z.string().min(1), name: z.string().min(1) }).optional(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+  })
+  .refine((e) => sumMatches(e.payers, e.amountMinor) && sumMatches(e.shares, e.amountMinor), {
+    message: 'Payers and shares must add up to the amount',
+  });
+export type Expense = z.infer<typeof ExpenseSchema>;
+
+/** Money that changed hands between two people to pay back what's owed. */
+export const SettlementSchema = z.object({
+  id: z.string().min(1),
+  fromId: z.string().min(1),
+  toId: z.string().min(1),
+  amountMinor: MinorUnits.positive(),
+  paidOn: CalendarDay,
+  createdAt: z.number(),
+});
+export type Settlement = z.infer<typeof SettlementSchema>;
+
+export const TripLedgerHeaderSchema = z.object({
+  tripId: z.string().min(1),
+  /** ISO 4217. Every amount in the ledger is in this currency. */
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  createdAt: z.number(),
+});
+
+type TripLedgerHeader = z.infer<typeof TripLedgerHeaderSchema>;
+
+export interface TripLedger extends TripLedgerHeader {
+  members: Member[];
+  expenses: Expense[];
+  settlements: Settlement[];
+}
 
 export interface LatLng {
   lat: number;

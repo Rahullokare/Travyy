@@ -11,6 +11,7 @@ export {
   Screen,
   ScreenScroll,
   Section,
+  Segmented,
   TextField,
   type IconName,
 } from './primitives';

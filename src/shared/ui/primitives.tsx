@@ -102,6 +102,44 @@ export function Chip({
   );
 }
 
+/** Pick one of a few options that swap what's shown, on one always-visible track. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  accessibilityLabel,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  accessibilityLabel: string;
+}) {
+  const styles = useStyles();
+  const { dark } = useTheme();
+  return (
+    <View accessibilityRole="tablist" accessibilityLabel={accessibilityLabel} style={styles.segmented}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <PressableScale
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityLabel={option.label}
+            aria-selected={selected}
+            scale={0.97}
+            onPress={() => onChange(option.value)}
+            style={[styles.segment, selected && [styles.segmentSelected, lift(dark)]]}
+          >
+            <Text variant="caption" color={selected ? 'text' : 'textMuted'} style={styles.segmentLabel}>
+              {option.label}
+            </Text>
+          </PressableScale>
+        );
+      })}
+    </View>
+  );
+}
+
 /**
  * Horizontally scrolling row of chips. `flexGrow: 0` matters on web, where a horizontal
  * ScrollView otherwise stretches to fill its column parent.
@@ -235,6 +273,15 @@ const useStyles = makeStyles((t) => ({
   },
   chipPressed: { backgroundColor: t.colors.surfacePressed },
   chipLabel: { fontWeight: '600', fontSize: 14, letterSpacing: -0.1 },
+  segmented: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: 12,
+    backgroundColor: t.colors.surfacePressed,
+  },
+  segment: { flex: 1, minHeight: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  segmentSelected: { backgroundColor: t.colors.surface },
+  segmentLabel: { fontWeight: '600', fontSize: 14 },
   card: {
     backgroundColor: t.colors.surface,
     borderRadius: 16,
