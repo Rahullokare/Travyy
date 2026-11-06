@@ -139,3 +139,19 @@ export function parseAmount(text: string, currency: string): number | undefined 
   const minor = Number(whole + fraction.padEnd(digits, '0'));
   return Number.isSafeInteger(minor) && minor <= MAX_AMOUNT_MINOR ? minor : undefined;
 }
+
+/** Convert using `rate`: how many whole `to` units one whole `from` unit buys. */
+export function convertMinor(minor: number, from: string, to: string, rate: number): number {
+  return Math.round((minor / 10 ** minorDigits(from)) * rate * 10 ** minorDigits(to));
+}
+
+/** The rate implied by what was paid and what the bank charged for it. */
+export function impliedRate(fromMinor: number, from: string, toMinor: number, to: string): number {
+  return toMinor / 10 ** minorDigits(to) / (fromMinor / 10 ** minorDigits(from));
+}
+
+/** "1 THB = 2.824 INR". */
+export function formatRate(rate: number, from: string, to: string, locale?: string): string {
+  const value = new Intl.NumberFormat(locale, { maximumSignificantDigits: 4 }).format(rate);
+  return `1 ${from} = ${value} ${to}`;
+}

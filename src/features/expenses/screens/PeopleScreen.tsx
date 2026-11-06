@@ -134,9 +134,7 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
 
       <Section title="Settle in">
         {currencyLocked ? (
-          <Text variant="caption">
-            {currency}. This is fixed once costs are logged, because every amount is in it.
-          </Text>
+          <Text variant="caption">{currency}. Balances stay in this currency once costs are logged.</Text>
         ) : (
           <ChipRow inset={0}>
             {currencies.map((code) => (

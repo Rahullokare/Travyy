@@ -1,4 +1,4 @@
-import type { SourcePlatform, SplitMode } from '@/domain/models';
+import type { RateSource, SourcePlatform, SplitMode } from '@/domain/models';
 
 /**
  * Typed product-analytics events — the activation/retention funnel from docs/RESEARCH.md.
@@ -15,7 +15,10 @@ export type AnalyticsEvent =
   | { name: 'paywall_viewed'; props: { trigger: string } }
   | { name: 'signed_in'; props: { method: 'email' | 'google' | 'apple' } }
   | { name: 'ledger_created'; props: { people: number; currency: string } }
-  | { name: 'expense_saved'; props: { mode: SplitMode; people: number; onStop: boolean; edited: boolean } }
+  | {
+      name: 'expense_saved';
+      props: { mode: SplitMode; people: number; onStop: boolean; edited: boolean; rate?: RateSource };
+    }
   | { name: 'payment_recorded'; props: { suggested: boolean } }
   | { name: 'money_summary_shared'; props: { expenses: number } };
 

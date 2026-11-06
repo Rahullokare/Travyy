@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import type { Place } from '@/domain/models';
 import { formatMoney } from '@/domain/money';
+import { useRefreshProvisionalRates } from '@/features/expenses/api/useRefreshProvisionalRates';
 import { StopCostRow } from '@/features/expenses/components/StopCostRow';
 import { TripMoney } from '@/features/expenses/components/TripMoney';
 import { stopCosts } from '@/features/expenses/ledger';
@@ -37,6 +38,7 @@ export function TripDetailScreen({ id }: { id: string }) {
   const ledger = useLedgerStore((s) => s.ledgers[id]);
   const [day, setDay] = useState(0);
   const [view, setView] = useState<TripView>('plan');
+  useRefreshProvisionalRates(ledger);
 
   const byId = useMemo(() => new globalThis.Map(allPlaces.map((p) => [p.id, p])), [allPlaces]);
   const dayIndex = trip ? Math.min(day, trip.days.length - 1) : 0;

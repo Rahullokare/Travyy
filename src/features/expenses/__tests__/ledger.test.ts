@@ -3,14 +3,19 @@ import type { Expense, Member, TripLedger } from '@/domain/models';
 import { ExpenseSchema } from '@/domain/models';
 import {
   allocate,
+  applyRate,
   computeShares,
+  currenciesUsed,
   expensesByDay,
+  hasProvisionalRate,
   lastParticipants,
   memberInUse,
   memberTotals,
   netBalances,
   paidLabel,
   paymentLabel,
+  scaleAmounts,
+  splitConverted,
   stopCosts,
   suggestPayments,
 } from '../ledger';
@@ -458,5 +463,123 @@ describe('tripDeleteMessage', () => {
     expect(tripDeleteMessage(ledger({ expenses: [owed, even] }))).toBe(
       'This also deletes 2 logged costs, and the group hasn’t settled up yet. Your saved spots stay saved.',
     );
+  });
+});
+
+describe('scaleAmounts', () => {
+  it('always adds up to the total, without negative parts', () => {
+    const next = random(31);
+    for (let run = 0; run < 500; run++) {
+      const amounts = Array.from({ length: 1 + next(10) }, () => next(100_000_000));
+      if (sum(amounts) === 0) continue;
+      const total = 1 + next(100_000_000);
+      const scaled = scaleAmounts(amounts, total);
+      expect(sum(scaled)).toBe(total);
+      expect(scaled.every((a) => Number.isInteger(a) && a >= 0)).toBe(true);
+    }
+  });
+
+  it('stays exact at the largest amounts the app allows', () => {
+    const scaled = scaleAmounts([100_000_000_000, 33_333_333_333], 100_000_000_000);
+    expect(sum(scaled)).toBe(100_000_000_000);
+  });
+
+  it('leaves amounts alone when the total already matches', () => {
+    expect(scaleAmounts([400, 600], 1000)).toEqual([400, 600]);
+  });
+
+  it('handles nothing to scale', () => {
+    expect(scaleAmounts([0, 0], 100)).toEqual([0, 0]);
+  });
+});
+
+describe('splitConverted', () => {
+  it('checks exact amounts against what was paid, and shows the rest in that currency', () => {
+    const result = splitConverted(225000, 90000, 'exact', [{ memberId: 'a', input: 30000 }], 'e1');
+    expect(result).toEqual({ ok: false, reason: 'exact_total', remaining: 60000 });
+  });
+
+  it('scales exact amounts to the trip currency and keeps what was typed', () => {
+    const result = splitConverted(
+      225000,
+      90000,
+      'exact',
+      [
+        { memberId: 'a', input: 30000 },
+        { memberId: 'b', input: 60000 },
+      ],
+      'e1',
+    );
+    expect(result).toEqual({
+      ok: true,
+      shares: [
+        { memberId: 'a', amountMinor: 75000, input: 30000 },
+        { memberId: 'b', amountMinor: 150000, input: 60000 },
+      ],
+    });
+  });
+
+  it('divides the converted total for other modes', () => {
+    const result = splitConverted(1000, 123, 'equal', [{ memberId: 'a' }, { memberId: 'b' }], 'e1');
+    expect(result).toMatchObject({
+      ok: true,
+      shares: [{ amountMinor: 500 }, { amountMinor: 500 }],
+    });
+  });
+});
+
+describe('applyRate', () => {
+  const paidInBaht = (rateSource: 'auto' | 'cached' | 'manual', mode: Expense['splitMode'] = 'equal') => {
+    const inputs = mode === 'exact' ? [30001, 59999] : mode === 'percent' ? [25, 75] : [undefined, undefined];
+    return {
+      ...expense('tour', 225000, 'a', []),
+      splitMode: mode,
+      shares: [
+        { memberId: 'a', amountMinor: 112500, ...(inputs[0] ? { input: inputs[0] } : {}) },
+        { memberId: 'b', amountMinor: 112500, ...(inputs[1] ? { input: inputs[1] } : {}) },
+      ],
+      original: { amountMinor: 90000, currency: 'THB', rate: 2.5, rateDate: '2026-11-01', rateSource },
+    } satisfies Expense;
+  };
+
+  it('knows which rates are provisional', () => {
+    expect(hasProvisionalRate(paidInBaht('cached'))).toBe(true);
+    expect(hasProvisionalRate(paidInBaht('auto'))).toBe(false);
+    expect(hasProvisionalRate(expense('x', 100, 'a', [['a', 100]]))).toBe(false);
+  });
+
+  it.each(['equal', 'exact', 'percent'] as const)('reconverts a %s split so it still balances', (mode) => {
+    const updated = applyRate(paidInBaht('cached', mode), 'INR', 2.81, '2026-11-06');
+    expect(updated?.amountMinor).toBe(252900);
+    expect(updated?.original).toMatchObject({ rate: 2.81, rateDate: '2026-11-06', rateSource: 'auto' });
+    expect(ExpenseSchema.safeParse(updated).success).toBe(true);
+  });
+
+  it('refuses a rate that would make the amount vanish', () => {
+    expect(applyRate(paidInBaht('cached'), 'INR', 0.0000001, '2026-11-06')).toBeUndefined();
+  });
+
+  it('has nothing to do for a cost in the trip currency', () => {
+    expect(applyRate(expense('x', 100, 'a', [['a', 100]]), 'INR', 2, '2026-11-06')).toBeUndefined();
+  });
+});
+
+describe('currenciesUsed', () => {
+  it('lists what the trip paid in, newest first', () => {
+    const baht = {
+      ...expense('a', 100, 'a', [['a', 100]]),
+      createdAt: 3,
+      original: {
+        amountMinor: 40,
+        currency: 'THB',
+        rate: 2.5,
+        rateDate: '2026-11-01',
+        rateSource: 'auto' as const,
+      },
+    };
+    const home = { ...expense('b', 100, 'a', [['a', 100]]), createdAt: 2 };
+    const older = { ...baht, id: 'c', createdAt: 1 };
+    expect(currenciesUsed({ currency: 'INR', expenses: [home, older, baht] })).toEqual(['THB', 'INR']);
+    expect(currenciesUsed({ currency: 'INR', expenses: [] })).toEqual([]);
   });
 });

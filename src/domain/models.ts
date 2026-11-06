@@ -87,6 +87,23 @@ export type SplitMode = z.infer<typeof SplitModeSchema>;
 /** Integer count of the currency's smallest unit. See `domain/money.ts`. */
 const MinorUnits = z.number().int().nonnegative().max(MAX_AMOUNT_MINOR);
 const CalendarDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const CurrencyCode = z.string().regex(/^[A-Z]{3}$/);
+
+export const RATE_SOURCES = ['auto', 'cached', 'manual'] as const;
+export const RateSourceSchema = z.enum(RATE_SOURCES);
+/** auto: looked up for this date. cached: the last known rate, replaced once online. manual: what the bank charged. */
+export type RateSource = z.infer<typeof RateSourceSchema>;
+
+/** What was actually paid, when that wasn't the trip's currency. The rate stays with the expense for good. */
+export const OriginalAmountSchema = z.object({
+  amountMinor: MinorUnits.positive(),
+  currency: CurrencyCode,
+  /** How many whole trip-currency units one whole unit of `currency` buys. */
+  rate: z.number().positive(),
+  rateDate: CalendarDay,
+  rateSource: RateSourceSchema,
+});
+export type OriginalAmount = z.infer<typeof OriginalAmountSchema>;
 
 /** Someone on a trip. A name, not an account, so friends count without installing the app. */
 export const MemberSchema = z.object({
@@ -99,7 +116,7 @@ export type Member = z.infer<typeof MemberSchema>;
 
 const MemberAmountSchema = z.object({ memberId: z.string().min(1), amountMinor: MinorUnits });
 export const ExpenseShareSchema = MemberAmountSchema.extend({
-  /** What was entered for this person, kept for editing. Unused by equal splits. */
+  /** What was entered for this person, kept for editing: exact amounts are in the currency paid. Unused by equal splits. */
   input: z.number().nonnegative().optional(),
 });
 export type ExpenseShare = z.infer<typeof ExpenseShareSchema>;
@@ -114,8 +131,9 @@ export const ExpenseSchema = z
     title: z.string().min(1),
     category: ExpenseCategorySchema,
     spentOn: CalendarDay,
-    /** In the trip's currency. */
+    /** In the trip's currency, as are payers and shares. */
     amountMinor: MinorUnits.positive(),
+    original: OriginalAmountSchema.optional(),
     payers: z.array(MemberAmountSchema).min(1),
     splitMode: SplitModeSchema,
     shares: z.array(ExpenseShareSchema).min(1),
@@ -145,8 +163,8 @@ export type Settlement = z.infer<typeof SettlementSchema>;
 
 export const TripLedgerHeaderSchema = z.object({
   tripId: z.string().min(1),
-  /** ISO 4217. Every amount in the ledger is in this currency. */
-  currency: z.string().regex(/^[A-Z]{3}$/),
+  /** ISO 4217. Balances, shares and payments are all in this currency. */
+  currency: CurrencyCode,
   createdAt: z.number(),
 });
 

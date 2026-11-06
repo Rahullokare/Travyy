@@ -13,6 +13,7 @@ import { formatDay } from '../dates';
 import {
   displayName,
   expensesByDay,
+  hasProvisionalRate,
   memberTotals,
   netBalances,
   paidLabel,
@@ -206,6 +207,9 @@ function ExpenseRow({
     `${displayName(payer)} paid`,
     `${people} ${people === 1 ? 'person' : 'people'}`,
     expense.stop && expense.stop.name !== expense.title ? expense.stop.name : undefined,
+    expense.original
+      ? `${formatMoney(expense.original.amountMinor, expense.original.currency)}${hasProvisionalRate(expense) ? ' (rate may update)' : ''}`
+      : undefined,
   ].filter(Boolean);
   return (
     <Pressable

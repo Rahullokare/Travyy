@@ -1,5 +1,7 @@
 import type { Expense, ExpenseShare, Member, Settlement, SplitMode, TripLedger } from '@/domain/models';
 
+import { convertMinor, MAX_AMOUNT_MINOR } from '@/domain/money';
+
 /**
  * The maths behind a trip's shared costs, as plain functions. Balances are always worked out
  * from the expenses and payments, never stored, so an edit or delete can't leave one stale.
@@ -92,6 +94,84 @@ export function computeShares(
       ...(mode === 'equal' ? {} : { input: p.input }),
     })),
   };
+}
+
+/**
+ * Scale amounts to sum to exactly `total`, keeping their proportions. Rounds the running total
+ * rather than each part, so the sum can't drift and large inputs can't overflow.
+ */
+export function scaleAmounts(amounts: number[], total: number): number[] {
+  const sum = amounts.reduce((s, a) => s + a, 0);
+  if (sum === 0) return amounts.map(() => 0);
+  let running = 0;
+  let previous = 0;
+  return amounts.map((amount) => {
+    running += amount;
+    const upTo = Math.round((running / sum) * total);
+    const part = upTo - previous;
+    previous = upTo;
+    return part;
+  });
+}
+
+/**
+ * Shares in the trip's currency for an expense paid in another. Exact amounts are typed in the
+ * currency paid, so they're checked against that total and then scaled; other modes are
+ * proportions, which divide the converted total directly.
+ */
+export function splitConverted(
+  tripAmountMinor: number,
+  paidAmountMinor: number,
+  mode: SplitMode,
+  participants: SplitParticipant[],
+  seed: string,
+): SplitResult {
+  if (mode !== 'exact') return computeShares(tripAmountMinor, mode, participants, seed);
+  const result = computeShares(paidAmountMinor, mode, participants, seed);
+  if (!result.ok) return result;
+  const amounts = scaleAmounts(
+    result.shares.map((s) => s.amountMinor),
+    tripAmountMinor,
+  );
+  return { ok: true, shares: result.shares.map((s, i) => ({ ...s, amountMinor: amounts[i] })) };
+}
+
+/** Is this converted at a saved rate that should be replaced once online? */
+export function hasProvisionalRate(expense: Expense): boolean {
+  return expense.original?.rateSource === 'cached';
+}
+
+/** The expense converted at a newly looked-up rate; undefined if it doesn't fit the rules. */
+export function applyRate(expense: Expense, tripCurrency: string, rate: number, rateDate: string) {
+  const { original } = expense;
+  if (!original) return undefined;
+  const amountMinor = convertMinor(original.amountMinor, original.currency, tripCurrency, rate);
+  if (amountMinor < 1 || amountMinor > MAX_AMOUNT_MINOR) return undefined;
+  const split = splitConverted(
+    amountMinor,
+    original.amountMinor,
+    expense.splitMode,
+    expense.shares.map((s) => ({ memberId: s.memberId, input: s.input })),
+    expense.id,
+  );
+  if (!split.ok) return undefined;
+  const payers = scaleAmounts(
+    expense.payers.map((p) => p.amountMinor),
+    amountMinor,
+  );
+  return {
+    ...expense,
+    amountMinor,
+    shares: split.shares,
+    payers: expense.payers.map((p, i) => ({ ...p, amountMinor: payers[i] })),
+    original: { ...original, rate, rateDate, rateSource: 'auto' as const },
+  } satisfies Expense;
+}
+
+/** Currencies this trip's costs were paid in, most recent first. */
+export function currenciesUsed({ currency, expenses }: Pick<TripLedger, 'currency' | 'expenses'>): string[] {
+  const newestFirst = [...expenses].sort((a, b) => b.createdAt - a.createdAt);
+  return [...new Set(newestFirst.map((e) => e.original?.currency ?? currency))];
 }
 
 /** What each person is up or down overall: positive means they're owed money. */

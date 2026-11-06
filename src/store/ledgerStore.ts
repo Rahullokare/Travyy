@@ -11,7 +11,7 @@ import {
   type Settlement,
   type TripLedger,
 } from '@/domain/models';
-import { memberInUse } from '@/features/expenses/ledger';
+import { applyRate, hasProvisionalRate, memberInUse } from '@/features/expenses/ledger';
 import { newId } from '@/shared/lib/id';
 import { keepValid } from './keepValid';
 
@@ -30,6 +30,8 @@ export interface LedgerActions {
   /** Add or replace by id, so a repeated save can't create a duplicate. */
   saveExpense: (tripId: string, expense: Omit<Expense, 'createdAt' | 'updatedAt'>) => void;
   removeExpense: (tripId: string, expenseId: string) => void;
+  /** Replace a saved rate with a looked-up one. Leaves anything edited or deleted meanwhile alone. */
+  applyLookedUpRate: (tripId: string, expenseId: string, rate: number, rateDate: string) => void;
   addSettlement: (tripId: string, payment: Omit<Settlement, 'id' | 'createdAt'>) => string;
   removeSettlement: (tripId: string, settlementId: string) => void;
   removeLedger: (tripId: string) => void;
@@ -91,6 +93,16 @@ export const useLedgerStore = create<LedgerStore>()(
 
         removeExpense: (tripId, expenseId) =>
           update(tripId, (l) => ({ ...l, expenses: l.expenses.filter((e) => e.id !== expenseId) })),
+
+        applyLookedUpRate: (tripId, expenseId, rate, rateDate) =>
+          update(tripId, (l) => ({
+            ...l,
+            expenses: l.expenses.map((e) => {
+              if (e.id !== expenseId || !hasProvisionalRate(e)) return e;
+              const updated = applyRate(e, l.currency, rate, rateDate);
+              return updated ? { ...updated, updatedAt: Date.now() } : e;
+            }),
+          })),
 
         addSettlement: (tripId, payment) => {
           const id = newId();

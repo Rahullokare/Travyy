@@ -1,6 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  convertMinor,
   defaultCurrency,
+  formatRate,
+  impliedRate,
   formatMoney,
   MAX_AMOUNT_MINOR,
   minorDigits,
@@ -87,5 +90,26 @@ describe('defaultCurrency', () => {
   it('falls back to USD', () => {
     expect(defaultCurrency('en')).toBe('USD');
     expect(defaultCurrency('xx-ZZ')).toBe('USD');
+  });
+});
+
+describe('conversion', () => {
+  it('converts between currencies with different decimals', () => {
+    expect(convertMinor(90000, 'THB', 'INR', 2.5)).toBe(225000);
+    expect(convertMinor(1000, 'JPY', 'INR', 0.6)).toBe(60000);
+    expect(convertMinor(10000, 'INR', 'JPY', 1.65)).toBe(165);
+    expect(convertMinor(1000, 'KWD', 'USD', 3.25)).toBe(325);
+  });
+
+  it('works out the rate from what the bank charged', () => {
+    expect(impliedRate(90000, 'THB', 253000, 'INR')).toBeCloseTo(2.8111, 3);
+    expect(impliedRate(1000, 'JPY', 60000, 'INR')).toBeCloseTo(0.6, 6);
+    const rate = impliedRate(90000, 'THB', 253000, 'INR');
+    expect(convertMinor(90000, 'THB', 'INR', rate)).toBe(253000);
+  });
+
+  it('words a rate', () => {
+    expect(formatRate(2.82449, 'THB', 'INR', 'en-US')).toBe('1 THB = 2.824 INR');
+    expect(formatRate(0.003383, 'VND', 'INR', 'en-US')).toBe('1 VND = 0.003383 INR');
   });
 });

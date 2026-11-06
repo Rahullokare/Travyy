@@ -5,12 +5,21 @@ import {
   EXPENSE_CATEGORIES,
   SPLIT_MODES,
   type Expense,
+  type OriginalAmount,
   type ExpenseCategory,
   type SplitMode,
   type Trip,
   type TripLedger,
 } from '@/domain/models';
-import { formatMoney, minorToInput, parseAmount } from '@/domain/money';
+import {
+  convertMinor,
+  CURRENCIES,
+  formatMoney,
+  impliedRate,
+  MAX_AMOUNT_MINOR,
+  minorToInput,
+  parseAmount,
+} from '@/domain/money';
 import { track } from '@/shared/lib/analytics';
 import { newId } from '@/shared/lib/id';
 import { confirm, haptics } from '@/shared/lib/platform';
@@ -28,9 +37,18 @@ import {
   TextField,
 } from '@/shared/ui';
 import { useAppStore, useLedgerStore } from '@/store';
+import { useEntryRate } from '../api/rates';
 import { EXPENSE_CATEGORY_META, expenseCategoryFor } from '../categories';
+import { RatePanel } from '../components/RatePanel';
 import { daysAgo, isValidDay, localDay } from '../dates';
-import { computeShares, displayName, lastParticipants, selfMember, type SplitResult } from '../ledger';
+import {
+  currenciesUsed,
+  displayName,
+  lastParticipants,
+  selfMember,
+  splitConverted,
+  type SplitResult,
+} from '../ledger';
 import { closeForm } from '../navigation';
 
 const MODE_LABEL: Record<SplitMode, string> = {
@@ -97,7 +115,18 @@ function ExpenseForm({
   const everyone = members.map((m) => m.id);
   const [id] = useState(() => existing?.id ?? newId());
   const [title, setTitle] = useState(existing?.title ?? startPlace?.name ?? '');
-  const [amountText, setAmountText] = useState(existing ? minorToInput(existing.amountMinor, currency) : '');
+  // Most costs abroad are in the local currency, so a new one starts in whatever was used last.
+  const [paidCurrency, setPaidCurrency] = useState(
+    existing ? (existing.original?.currency ?? currency) : (currenciesUsed(ledger)[0] ?? currency),
+  );
+  const [otherCurrency, setOtherCurrency] = useState(false);
+  const [amountText, setAmountText] = useState(
+    existing ? minorToInput(existing.original?.amountMinor ?? existing.amountMinor, paidCurrency) : '',
+  );
+  const [charging, setCharging] = useState(existing?.original?.rateSource === 'manual');
+  const [chargedText, setChargedText] = useState(
+    existing?.original?.rateSource === 'manual' ? minorToInput(existing.amountMinor, currency) : '',
+  );
   const [category, setCategory] = useState<ExpenseCategory>(
     existing?.category ?? (startPlace ? expenseCategoryFor(startPlace.category) : 'food'),
   );
@@ -116,7 +145,9 @@ function ExpenseForm({
     return Object.fromEntries(
       existing.shares.map((s) => [
         s.memberId,
-        existing.splitMode === 'exact' ? minorToInput(s.amountMinor, currency) : String(s.input ?? ''),
+        existing.splitMode === 'exact'
+          ? minorToInput(s.input ?? s.amountMinor, paidCurrency)
+          : String(s.input ?? ''),
       ]),
     );
   });
@@ -130,11 +161,45 @@ function ExpenseForm({
   const yesterday = daysAgo(1);
   const [pickingDay, setPickingDay] = useState(day !== today && day !== yesterday);
 
-  const parsed = parseAmount(amountText, currency);
-  const amountMinor = parsed ? parsed : undefined;
+  const paidMinor = parseAmount(amountText, paidCurrency) || undefined;
+  const foreign = paidCurrency !== currency;
+  const dayValid = isValidDay(day);
+  const fx = useEntryRate(currency, paidCurrency, day, dayValid);
+
+  // A rate stays with its expense: editing the title or amount mustn't change it. A saved rate
+  // isn't kept, so editing also picks up a real one if it's available by now.
+  const kept =
+    existing?.original &&
+    existing.original.currency === paidCurrency &&
+    existing.spentOn === day &&
+    existing.original.rateSource === 'auto'
+      ? existing.original
+      : undefined;
+  const lookedUp =
+    kept ??
+    (fx.status === 'ready' ? { rate: fx.rate, rateDate: fx.rateDate, rateSource: fx.source } : undefined);
+  const usingCharged = foreign && (charging || (!lookedUp && fx.status !== 'loading'));
+
+  /** The amount in the trip's currency, and where it came from. */
+  const converted = ((): { amountMinor: number; original?: OriginalAmount } | undefined => {
+    if (paidMinor === undefined) return undefined;
+    if (!foreign) return { amountMinor: paidMinor };
+    const paid = { amountMinor: paidMinor, currency: paidCurrency };
+    if (usingCharged) {
+      const charged = parseAmount(chargedText, currency) || undefined;
+      if (charged === undefined) return undefined;
+      const rate = impliedRate(paidMinor, paidCurrency, charged, currency);
+      return { amountMinor: charged, original: { ...paid, rate, rateDate: day, rateSource: 'manual' } };
+    }
+    if (!lookedUp) return undefined;
+    const amountMinor = convertMinor(paidMinor, paidCurrency, currency, lookedUp.rate);
+    if (amountMinor < 1 || amountMinor > MAX_AMOUNT_MINOR) return undefined;
+    return { amountMinor, original: { ...paid, ...lookedUp } };
+  })();
+  const amountMinor = converted?.amountMinor;
 
   const result: SplitResult | undefined = useMemo(() => {
-    if (amountMinor === undefined) return undefined;
+    if (amountMinor === undefined || paidMinor === undefined) return undefined;
     const fallback = mode === 'shares' ? '1' : '';
     const participants = members
       .filter((m) => included.has(m.id))
@@ -143,11 +208,11 @@ function ExpenseForm({
         if (mode === 'equal') return { memberId: m.id };
         return {
           memberId: m.id,
-          input: mode === 'exact' ? (parseAmount(text, currency) ?? 0) : toNumber(text),
+          input: mode === 'exact' ? (parseAmount(text, paidCurrency) ?? 0) : toNumber(text),
         };
       });
-    return computeShares(amountMinor, mode, participants, id);
-  }, [amountMinor, mode, members, included, inputs, currency, id]);
+    return splitConverted(amountMinor, paidMinor, mode, participants, id);
+  }, [amountMinor, paidMinor, mode, members, included, inputs, paidCurrency, id]);
 
   const shareOf = (memberId: string) =>
     result?.ok ? result.shares.find((s) => s.memberId === memberId)?.amountMinor : undefined;
@@ -174,8 +239,19 @@ function ExpenseForm({
     }
   };
 
-  const dayValid = isValidDay(day);
   const canSave = !!result?.ok && dayValid;
+
+  const choosePaidCurrency = (code: string) => {
+    haptics.selection();
+    setOtherCurrency(false);
+    setPaidCurrency(code);
+    setCharging(false);
+    setChargedText('');
+    // Exact amounts were typed in the old currency.
+    if (mode === 'exact') setInputs({});
+  };
+
+  const currencyChips = [...new Set([currency, ...currenciesUsed(ledger), paidCurrency, ...CURRENCIES])];
 
   const save = () => {
     if (!result?.ok || amountMinor === undefined || !dayValid) return;
@@ -185,6 +261,7 @@ function ExpenseForm({
       category,
       spentOn: day,
       amountMinor,
+      ...(converted?.original ? { original: converted.original } : {}),
       payers: [{ memberId: payerId, amountMinor }],
       splitMode: mode,
       shares: result.shares,
@@ -195,6 +272,7 @@ function ExpenseForm({
       people: result.shares.length,
       onStop: !!stop,
       edited: !!existing,
+      rate: converted?.original?.rateSource,
     });
     haptics.success();
     closeForm(trip.id);
@@ -225,7 +303,7 @@ function ExpenseForm({
       <Stack.Screen options={{ title: existing ? 'Edit expense' : 'Add expense' }} />
 
       <TextField
-        label={`Amount (${currency})`}
+        label={`Amount (${paidCurrency})`}
         value={amountText}
         onChangeText={setAmountText}
         keyboardType="decimal-pad"
@@ -233,11 +311,56 @@ function ExpenseForm({
         autoFocus={!existing}
         style={styles.amount}
       />
-      {amountText.trim() && amountMinor === undefined ? (
+      {amountText.trim() && paidMinor === undefined ? (
         <Text variant="caption" color="danger">
-          That doesn’t look like an amount in {currency}.
+          That doesn’t look like an amount in {paidCurrency}.
         </Text>
       ) : null}
+      <Section title="Paid in">
+        <ChipRow inset={0}>
+          {currencyChips.map((code) => (
+            <Chip
+              key={code}
+              label={code}
+              selected={!otherCurrency && code === paidCurrency}
+              onPress={() => choosePaidCurrency(code)}
+            />
+          ))}
+          <Chip label="Other" selected={otherCurrency} onPress={() => setOtherCurrency(true)} />
+        </ChipRow>
+        {otherCurrency ? (
+          <TextField
+            placeholder="Three-letter code, like KES"
+            accessibilityLabel="Currency code"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={3}
+            onChangeText={(text) => {
+              const code = text.toUpperCase();
+              if (/^[A-Z]{3}$/.test(code)) choosePaidCurrency(code);
+            }}
+          />
+        ) : null}
+        {foreign ? (
+          <RatePanel
+            from={paidCurrency}
+            to={currency}
+            shown={
+              lookedUp && {
+                rate: lookedUp.rate,
+                rateDate: lookedUp.rateDate,
+                provisional: lookedUp.rateSource === 'cached',
+              }
+            }
+            loading={fx.status === 'loading'}
+            convertedMinor={amountMinor}
+            charging={charging}
+            chargedText={chargedText}
+            onChargedText={setChargedText}
+            onCharging={setCharging}
+          />
+        ) : null}
+      </Section>
       <TextField
         label="What for"
         value={title}
@@ -345,7 +468,12 @@ function ExpenseForm({
             );
           })}
         </View>
-        <SplitHint result={result} hasAmount={amountMinor !== undefined} currency={currency} />
+        <SplitHint
+          result={result}
+          hasAmount={paidMinor !== undefined}
+          converted={amountMinor !== undefined}
+          currency={paidCurrency}
+        />
       </Section>
 
       <Section title="Date">
@@ -396,14 +524,17 @@ function ExpenseForm({
 function SplitHint({
   result,
   hasAmount,
+  converted,
   currency,
 }: {
   result: SplitResult | undefined;
   hasAmount: boolean;
+  /** False while the amount can't be put in the trip's currency yet; the rate panel explains why. */
+  converted: boolean;
   currency: string;
 }) {
   if (!hasAmount) return <Text variant="caption">Enter the amount to see each person’s share.</Text>;
-  if (!result || result.ok) return null;
+  if (!converted || !result || result.ok) return null;
   const message = () => {
     switch (result.reason) {
       case 'no_people':

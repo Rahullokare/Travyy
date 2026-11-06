@@ -76,6 +76,35 @@ describe('saveSetup', () => {
   });
 });
 
+describe('applyLookedUpRate', () => {
+  const baht = (rateSource: 'auto' | 'cached' | 'manual') => ({
+    ...dinner,
+    original: { amountMinor: 800, currency: 'THB', rate: 2.5, rateDate: '2026-11-01', rateSource },
+  });
+
+  it('replaces a saved rate and updates the amounts', () => {
+    store().saveExpense('t1', baht('cached'));
+    store().applyLookedUpRate('t1', 'e1', 3, '2026-11-06');
+    const [saved] = store().ledgers.t1.expenses;
+    expect(saved.amountMinor).toBe(2400);
+    expect(saved.original).toMatchObject({ rate: 3, rateSource: 'auto', rateDate: '2026-11-06' });
+    expect(saved.payers).toEqual([{ memberId: 'a', amountMinor: 2400 }]);
+  });
+
+  it.each(['auto', 'manual'] as const)('never changes a rate that is %s', (source) => {
+    store().saveExpense('t1', baht(source));
+    store().applyLookedUpRate('t1', 'e1', 3, '2026-11-06');
+    expect(store().ledgers.t1.expenses[0].amountMinor).toBe(2000);
+  });
+
+  it('does not bring back an expense deleted while the lookup was running', () => {
+    store().saveExpense('t1', baht('cached'));
+    store().removeExpense('t1', 'e1');
+    store().applyLookedUpRate('t1', 'e1', 3, '2026-11-06');
+    expect(store().ledgers.t1.expenses).toEqual([]);
+  });
+});
+
 describe('settlements', () => {
   it('records and removes a payment', () => {
     const id = store().addSettlement('t1', {
@@ -142,6 +171,30 @@ describe('sanitizeLedgers', () => {
     expect(result.ledgers?.t.members).toEqual([asha]);
     expect(result.ledgers?.t.expenses.map((e) => e.id)).toEqual(['e1']);
     expect(result.ledgers?.t.settlements).toEqual([]);
+  });
+
+  it('keeps a cost paid in another currency, and drops one with a bad rate', () => {
+    const original = {
+      amountMinor: 800,
+      currency: 'THB',
+      rate: 2.5,
+      rateDate: '2026-11-01',
+      rateSource: 'auto',
+    };
+    const result = sanitizeLedgers({
+      ledgers: {
+        t: {
+          ...header,
+          members: [asha],
+          expenses: [
+            { ...valid, original },
+            { ...valid, id: 'bad', original: { ...original, rate: 0 } },
+          ],
+        },
+      },
+    });
+    expect(result.ledgers?.t.expenses.map((e) => e.id)).toEqual(['e1']);
+    expect(result.ledgers?.t.expenses[0].original).toEqual(original);
   });
 
   it('drops a ledger with no people, a bad header, or the wrong key', () => {
