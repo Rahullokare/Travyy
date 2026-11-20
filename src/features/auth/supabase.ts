@@ -39,6 +39,9 @@ export const supabase: SupabaseClient | undefined =
           storage: Platform.OS === 'web' ? undefined : chunkedSecureStore,
           persistSession: true,
           autoRefreshToken: true,
+          // Google sign-in sends back a one-time code that `session.ts` exchanges itself (PKCE),
+          // on phones from the browser sheet and on web on the /auth-callback page.
+          flowType: 'pkce',
           detectSessionInUrl: false,
         },
       })
