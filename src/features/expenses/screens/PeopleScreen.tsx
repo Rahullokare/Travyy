@@ -7,7 +7,19 @@ import { track } from '@/shared/lib/analytics';
 import { newId } from '@/shared/lib/id';
 import { haptics, notify } from '@/shared/lib/platform';
 import { makeStyles } from '@/shared/theme';
-import { Button, Chip, ChipRow, IconButton, ScreenScroll, Section, Text, TextField } from '@/shared/ui';
+import {
+  Avatar,
+  Button,
+  Chip,
+  ChipRow,
+  Icon,
+  IconButton,
+  Pill,
+  ScreenScroll,
+  Section,
+  Text,
+  TextField,
+} from '@/shared/ui';
 import { useLedgerStore } from '@/store';
 import { memberInUse } from '../ledger';
 import { closeForm } from '../navigation';
@@ -86,6 +98,7 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
       <Section title="People">
         {people.map((member) => (
           <View key={member.id} style={styles.personRow}>
+            <Avatar name={member.name || (member.isSelf ? 'You' : '?')} seed={member.id} size={40} />
             <View style={styles.flex}>
               <TextField
                 value={member.name}
@@ -97,12 +110,14 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
               />
             </View>
             {member.isSelf ? (
-              <Text variant="caption" style={styles.you}>
-                You
-              </Text>
+              <View style={styles.you}>
+                <Pill label="You" tone="brand" />
+              </View>
             ) : (
               <IconButton
-                icon="close-circle-outline"
+                icon="close"
+                variant="tinted"
+                size={18}
                 color="textMuted"
                 accessibilityLabel={`Remove ${member.name}`}
                 onPress={() => remove(member)}
@@ -111,6 +126,9 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
           </View>
         ))}
         <View style={styles.personRow}>
+          <View style={styles.addAvatar}>
+            <Icon name="person-add" size={18} color="textMuted" />
+          </View>
           <View style={styles.flex}>
             <TextField
               value={draft}
@@ -124,8 +142,11 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
             />
           </View>
           <IconButton
-            icon="add-circle"
-            color={draft.trim() ? 'primary' : 'textMuted'}
+            icon="add"
+            variant="tinted"
+            size={20}
+            disabled={!draft.trim()}
+            color={draft.trim() ? 'primaryText' : 'textMuted'}
             accessibilityLabel="Add this person"
             onPress={addDraft}
           />
@@ -134,9 +155,14 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
 
       <Section title="Settle in">
         {currencyLocked ? (
-          <Text variant="caption">{currency}. Balances stay in this currency once costs are logged.</Text>
+          <View style={styles.locked}>
+            <Pill label={currency} icon="lock-closed" tone="neutral" />
+            <Text variant="caption" style={styles.flex}>
+              Balances stay in this currency once costs are logged.
+            </Text>
+          </View>
         ) : (
-          <ChipRow inset={0}>
+          <ChipRow bleed>
             {currencies.map((code) => (
               <Chip
                 key={code}
@@ -155,6 +181,7 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
       {duplicate ? <Text color="danger">Two people have the same name. Tell them apart.</Text> : null}
       <Button
         title={ledger ? 'Save' : placeId ? 'Next: add the cost' : 'Done'}
+        iconName={!ledger && placeId ? 'arrow-forward' : 'checkmark'}
         disabled={missingName || duplicate}
         onPress={save}
       />
@@ -162,8 +189,19 @@ export function PeopleScreen({ tripId, placeId }: { tripId: string; placeId?: st
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  you: { width: 30, textAlign: 'center' },
+  you: { width: 44, alignItems: 'center' },
+  addAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: t.colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locked: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 }));

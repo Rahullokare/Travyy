@@ -51,11 +51,14 @@ export function StopCostRow({
           accessibilityLabel={`Costs at ${place.name}: ${summary}`}
           onPress={open}
           hitSlop={8}
-          style={styles.summary}
+          style={({ pressed }) => [styles.summary, pressed && styles.pressedText]}
         >
-          <Text variant="caption" numberOfLines={1} style={styles.tabular}>
-            {summary}
-          </Text>
+          <View style={styles.spent}>
+            <Icon name="wallet" size={13} color="textMuted" />
+            <Text variant="caption" numberOfLines={1} style={styles.tabular}>
+              {summary}
+            </Text>
+          </View>
         </Pressable>
       ) : (
         <View style={styles.summary} />
@@ -67,8 +70,8 @@ export function StopCostRow({
         hitSlop={8}
         style={({ pressed }) => [styles.add, pressed && styles.pressed]}
       >
-        <Icon name="add" size={16} color="primary" />
-        <Text variant="caption" color="primary" style={styles.addLabel}>
+        <Icon name="add" size={15} color="primaryText" />
+        <Text variant="caption" color="primaryText" style={styles.addLabel}>
           Add cost
         </Text>
       </Pressable>
@@ -77,25 +80,29 @@ export function StopCostRow({
 }
 
 const useStyles = makeStyles((t) => ({
-  // Lines up under the stop's name, past the 44 px badge in PlaceRow.
+  // Lines up under the stop's name, past the badge in PlaceRow.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingLeft: 72,
     paddingRight: 16,
-    marginTop: -6,
+    marginTop: -4,
   },
   summary: { flex: 1 },
+  spent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pressedText: { opacity: 0.6 },
   tabular: { fontVariant: ['tabular-nums'] },
   add: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 3,
+    paddingVertical: 5,
+    paddingLeft: 8,
+    paddingRight: 11,
     borderRadius: 999,
+    backgroundColor: t.colors.primarySoft,
   },
-  addLabel: { fontWeight: '600' },
-  pressed: { backgroundColor: t.colors.surfacePressed },
+  addLabel: { fontWeight: '700' },
+  pressed: { opacity: 0.75 },
 }));

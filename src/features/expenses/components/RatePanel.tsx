@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { formatMoney, formatRate } from '@/domain/money';
-import { makeStyles } from '@/shared/theme';
-import { Text, TextField } from '@/shared/ui';
+import { makeStyles, radius } from '@/shared/theme';
+import { Pill, Text, TextField } from '@/shared/ui';
 import { formatDay } from '../dates';
 
 export type ShownRate = { rate: number; rateDate: string; provisional: boolean };
@@ -52,15 +52,23 @@ export function RatePanel({
     );
   }
 
-  if (!shown) return <Text variant="caption">Getting the exchange rate…</Text>;
+  if (!shown)
+    return (
+      <View style={styles.card}>
+        <Text variant="caption">Getting the exchange rate…</Text>
+      </View>
+    );
 
   return (
-    <View style={styles.panel}>
-      {convertedMinor !== undefined ? (
-        <Text variant="bodyStrong" style={styles.tabular}>
-          ≈ {formatMoney(convertedMinor, to)}
-        </Text>
-      ) : null}
+    <View style={styles.card}>
+      <View style={styles.top}>
+        {convertedMinor !== undefined ? (
+          <Text variant="headline" style={styles.tabular}>
+            ≈ {formatMoney(convertedMinor, to)}
+          </Text>
+        ) : null}
+        {shown.provisional ? <Pill label="Saved rate" icon="cloud-offline" tone="warning" /> : null}
+      </View>
       <Text variant="caption" style={styles.tabular}>
         {formatRate(shown.rate, from, to)} on {formatDay(shown.rateDate)}
       </Text>
@@ -77,14 +85,16 @@ export function RatePanel({
 function Link({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8} style={{ alignSelf: 'flex-start' }}>
-      <Text variant="caption" color="primary" style={{ fontWeight: '600' }}>
+      <Text variant="caption" color="primaryText" style={{ fontWeight: '700', marginTop: 4 }}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-const useStyles = makeStyles(() => ({
-  panel: { gap: 4 },
+const useStyles = makeStyles((t) => ({
+  panel: { gap: 6 },
+  card: { gap: 4, padding: 14, borderRadius: radius.md, backgroundColor: t.colors.surfaceSunken },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   tabular: { fontVariant: ['tabular-nums'] },
 }));

@@ -1,14 +1,17 @@
 import type { Category, ExpenseCategory } from '@/domain/models';
+import type { IconName } from '@/shared/ui';
 
-export const EXPENSE_CATEGORY_META: Record<ExpenseCategory, { label: string; emoji: string; color: string }> =
-  {
-    food: { label: 'Food', emoji: '🍜', color: '#F0643C' },
-    transport: { label: 'Transport', emoji: '🚕', color: '#2F7DF6' },
-    stay: { label: 'Stay', emoji: '🛏️', color: '#E0A100' },
-    activity: { label: 'Activity', emoji: '🎟️', color: '#0EA5A5' },
-    shopping: { label: 'Shopping', emoji: '🛍️', color: '#E2508C' },
-    other: { label: 'Other', emoji: '💸', color: '#6B7280' },
-  };
+export const EXPENSE_CATEGORY_META: Record<
+  ExpenseCategory,
+  { label: string; icon: IconName; color: string }
+> = {
+  food: { label: 'Food', icon: 'fast-food', color: '#E0532A' },
+  transport: { label: 'Transport', icon: 'car', color: '#2F6FE0' },
+  stay: { label: 'Stay', icon: 'bed', color: '#C98A0C' },
+  activity: { label: 'Activity', icon: 'ticket', color: '#11948A' },
+  shopping: { label: 'Shopping', icon: 'bag-handle', color: '#D2457E' },
+  other: { label: 'Other', icon: 'wallet', color: '#6B7280' },
+};
 
 /** A cost logged at a saved place starts in the matching expense category. */
 export function expenseCategoryFor(place: Category): ExpenseCategory {

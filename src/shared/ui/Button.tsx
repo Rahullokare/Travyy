@@ -1,29 +1,49 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native';
-import { makeStyles, useTheme } from '@/shared/theme';
+import { makeStyles, radius, useTheme, type ThemeColors } from '@/shared/theme';
 import { PressableScale } from './PressableScale';
+import { Icon, type IconName } from './primitives';
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'tinted' | 'ghost' | 'danger';
+type Size = 'lg' | 'md' | 'sm';
 
 export interface ButtonProps {
   title: string;
   onPress: () => void;
+  /**
+   * primary: the one main action on a screen. secondary: a quieter neighbour. tinted: brand-tinted,
+   * for a positive action that isn't the main one. ghost: text-only. danger: destructive.
+   */
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
   disabled?: boolean;
+  /** An icon from the app's set, coloured to match the label. */
+  iconName?: IconName;
+  /** A custom leading element, when `iconName` isn't enough. */
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
   accessibilityHint?: string;
   testID?: string;
 }
 
+const FOREGROUND: Record<Variant, keyof ThemeColors> = {
+  primary: 'onPrimary',
+  secondary: 'text',
+  tinted: 'primaryText',
+  ghost: 'primaryText',
+  danger: 'danger',
+};
+
 export function Button({
   title,
   onPress,
   variant = 'primary',
+  size = 'lg',
   loading,
   disabled,
+  iconName,
   icon,
   style,
   accessibilityHint,
@@ -32,6 +52,7 @@ export function Button({
   const styles = useStyles();
   const { colors } = useTheme();
   const isDisabled = disabled || loading;
+  const fg = FOREGROUND[variant];
   return (
     <PressableScale
       testID={testID}
@@ -41,18 +62,20 @@ export function Button({
       accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
       disabled={isDisabled}
       onPress={onPress}
-      style={[styles.base, styles[variant], isDisabled && styles.disabled, style]}
-      pressedStyle={variant === 'primary' ? styles.primaryPressed : styles.pressed}
+      scale={size === 'sm' ? 0.95 : 0.97}
+      style={[styles.base, styles[size], styles[variant], isDisabled && styles.disabled, style]}
+      pressedStyle={styles[`${variant}Pressed`]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.onPrimary : colors.primary} />
+        <ActivityIndicator color={colors[fg]} />
       ) : (
         <View style={styles.row}>
-          {icon}
+          {iconName ? <Icon name={iconName} size={size === 'sm' ? 16 : 19} color={fg} /> : icon}
           <Text
-            variant="bodyStrong"
+            variant={size === 'sm' ? 'callout' : 'bodyStrong'}
             numberOfLines={1}
-            style={[styles.label, variant === 'primary' && styles.labelPrimary]}
+            color={fg}
+            style={[styles.label, size === 'lg' && styles.labelLarge]}
           >
             {title}
           </Text>
@@ -63,20 +86,22 @@ export function Button({
 }
 
 const useStyles = makeStyles((t) => ({
-  base: {
-    minHeight: 52,
-    borderRadius: 999,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  base: { borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  lg: { minHeight: 54, paddingHorizontal: 24 },
+  md: { minHeight: 46, paddingHorizontal: 20 },
+  sm: { minHeight: 36, paddingHorizontal: 14 },
   primary: { backgroundColor: t.colors.primary },
   primaryPressed: { backgroundColor: t.colors.primaryPressed },
-  secondary: { backgroundColor: t.colors.surface, borderWidth: 1, borderColor: t.colors.border },
+  secondary: { backgroundColor: t.colors.surfaceSunken },
+  secondaryPressed: { backgroundColor: t.colors.surfacePressed },
+  tinted: { backgroundColor: t.colors.primarySoft },
+  tintedPressed: { opacity: 0.8 },
   ghost: { backgroundColor: 'transparent' },
-  pressed: { backgroundColor: t.colors.surfacePressed },
-  disabled: { opacity: 0.45 },
+  ghostPressed: { backgroundColor: t.colors.surfaceSunken },
+  danger: { backgroundColor: t.colors.dangerSoft },
+  dangerPressed: { opacity: 0.8 },
+  disabled: { opacity: 0.4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '100%' },
-  label: { fontSize: 16, color: t.colors.text, letterSpacing: -0.2, flexShrink: 1 },
-  labelPrimary: { color: t.colors.onPrimary },
+  label: { fontWeight: '700', flexShrink: 1 },
+  labelLarge: { fontSize: 16, letterSpacing: -0.2 },
 }));

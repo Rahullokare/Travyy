@@ -1,39 +1,49 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router/js-tabs';
-import type { ComponentProps } from 'react';
-import type { ColorValue } from 'react-native';
+import { NativeTabs } from 'expo-router/native-tabs';
 import { useDeliverPendingShare } from '@/features/capture/share/useDeliverPendingShare';
-import { useTheme } from '@/shared/theme';
+import { useOpenImportedTrip } from '@/features/trips/importInbox';
+import { FONT_FAMILY, useTheme } from '@/shared/theme';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-function tabIcon(name: IconName) {
-  return function TabIcon({ color, size }: { color: ColorValue; size: number }) {
-    return <Ionicons name={name} color={color as string} size={size} />;
-  };
-}
-
+/**
+ * The system tab bar: Material 3 navigation on Android, the platform tab bar on iOS. It brings the
+ * platform's own selection indicator, ripple, scroll-to-top and motion for free. Tabs are peers,
+ * so switching is instant. Web uses _layout.web.tsx.
+ */
 export default function TabsLayout() {
   const { colors } = useTheme();
   useDeliverPendingShare();
+  useOpenImportedTrip();
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.1 },
-        // Tabs are peers: switching is instant, never a slide.
-        animation: 'none',
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '800', color: colors.text, fontSize: 20, letterSpacing: -0.4 },
+    <NativeTabs
+      backgroundColor={colors.surface}
+      indicatorColor={colors.primarySoft}
+      rippleColor={colors.surfacePressed}
+      iconColor={{ default: colors.textMuted, selected: colors.primaryText }}
+      labelStyle={{
+        default: { fontFamily: FONT_FAMILY[600], fontSize: 12, color: colors.textMuted },
+        selected: { fontFamily: FONT_FAMILY[700], fontSize: 12, color: colors.text },
       }}
+      labelVisibilityMode="labeled"
+      disableTransparentOnScrollEdge
     >
-      <Tabs.Screen name="index" options={{ title: 'Map', headerShown: false, tabBarIcon: tabIcon('map') }} />
-      <Tabs.Screen name="saves" options={{ title: 'Saves', tabBarIcon: tabIcon('bookmark') }} />
-      <Tabs.Screen name="trips" options={{ title: 'Trips', tabBarIcon: tabIcon('airplane') }} />
-      <Tabs.Screen name="profile" options={{ title: 'You', tabBarIcon: tabIcon('person-circle') }} />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'map', selected: 'map.fill' }} md="map" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="saves">
+        <NativeTabs.Trigger.Label>Saves</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'bookmark', selected: 'bookmark.fill' }} md="bookmark" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="trips">
+        <NativeTabs.Trigger.Label>Trips</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'airplane', selected: 'airplane' }} md="flight" />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.Label>You</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
+          md="account_circle"
+        />
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

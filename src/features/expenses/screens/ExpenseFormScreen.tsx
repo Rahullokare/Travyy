@@ -23,7 +23,7 @@ import {
 import { track } from '@/shared/lib/analytics';
 import { newId } from '@/shared/lib/id';
 import { confirm, haptics } from '@/shared/lib/platform';
-import { makeStyles, useTheme } from '@/shared/theme';
+import { fontFor, lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
 import {
   Button,
   Chip,
@@ -84,7 +84,7 @@ export function ExpenseFormScreen({
   const existing = ledger?.expenses.find((e) => e.id === expenseId);
 
   if (!ledger || !trip || (expenseId && !existing))
-    return <EmptyState emoji="💸" title="Not found" body="It may have been deleted." />;
+    return <EmptyState icon="receipt-outline" title="Not found" body="It may have been deleted." />;
   return <ExpenseForm trip={trip} ledger={ledger} existing={existing} placeId={placeId} />;
 }
 
@@ -100,7 +100,7 @@ function ExpenseForm({
   placeId?: string;
 }) {
   const styles = useStyles();
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const saveExpense = useLedgerStore((s) => s.saveExpense);
   const removeExpense = useLedgerStore((s) => s.removeExpense);
   const places = useAppStore((s) => s.places);
@@ -317,7 +317,7 @@ function ExpenseForm({
         </Text>
       ) : null}
       <Section title="Paid in">
-        <ChipRow inset={0}>
+        <ChipRow bleed>
           {currencyChips.map((code) => (
             <Chip
               key={code}
@@ -370,11 +370,13 @@ function ExpenseForm({
       />
 
       <Section title="Category">
-        <ChipRow inset={0}>
+        <ChipRow bleed>
           {EXPENSE_CATEGORIES.map((c) => (
             <Chip
               key={c}
-              label={`${EXPENSE_CATEGORY_META[c].emoji} ${EXPENSE_CATEGORY_META[c].label}`}
+              label={EXPENSE_CATEGORY_META[c].label}
+              icon={EXPENSE_CATEGORY_META[c].icon}
+              color={EXPENSE_CATEGORY_META[c].color}
               selected={c === category}
               onPress={() => {
                 haptics.selection();
@@ -387,11 +389,12 @@ function ExpenseForm({
 
       {stopChips.length > 0 ? (
         <Section title="Stop on the plan">
-          <ChipRow inset={0}>
+          <ChipRow bleed>
             <Chip label="None" selected={!stop} onPress={() => chooseStop(undefined)} />
             {stopChips.map((p) => (
               <Chip
                 key={p.id}
+                icon="location"
                 label={short(p.name)}
                 selected={stop?.placeId === p.id}
                 onPress={() => chooseStop({ placeId: p.id, name: p.name })}
@@ -402,7 +405,7 @@ function ExpenseForm({
       ) : null}
 
       <Section title="Paid by">
-        <ChipRow inset={0}>
+        <ChipRow bleed>
           {members.map((m) => (
             <Chip
               key={m.id}
@@ -429,12 +432,12 @@ function ExpenseForm({
             setInputs({});
           }}
         />
-        <View>
-          {members.map((m) => {
+        <View style={[styles.people, lift(dark)]}>
+          {members.map((m, i) => {
             const isIn = included.has(m.id);
             const share = shareOf(m.id);
             return (
-              <View key={m.id} style={styles.personRow}>
+              <View key={m.id} style={[styles.personRow, i > 0 && styles.personDivider]}>
                 <Pressable
                   accessibilityRole="checkbox"
                   aria-checked={isIn}
@@ -444,9 +447,15 @@ function ExpenseForm({
                 >
                   <Icon
                     name={isIn ? 'checkmark-circle' : 'ellipse-outline'}
-                    color={isIn ? 'primary' : 'textMuted'}
+                    size={24}
+                    color={isIn ? 'primary' : 'textSubtle'}
                   />
-                  <Text numberOfLines={1} style={styles.flex} color={isIn ? 'text' : 'textMuted'}>
+                  <Text
+                    variant="bodyStrong"
+                    numberOfLines={1}
+                    style={styles.flex}
+                    color={isIn ? 'text' : 'textMuted'}
+                  >
                     {displayName(m)}
                   </Text>
                 </Pressable>
@@ -457,7 +466,8 @@ function ExpenseForm({
                     onChangeText={(text) => setInputs((all) => ({ ...all, [m.id]: text }))}
                     keyboardType="decimal-pad"
                     placeholder={mode === 'percent' ? '%' : '0'}
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.textSubtle}
+                    selectionColor={colors.primary}
                     style={styles.shareInput}
                   />
                 ) : null}
@@ -477,7 +487,7 @@ function ExpenseForm({
       </Section>
 
       <Section title="Date">
-        <ChipRow inset={0}>
+        <ChipRow bleed>
           <Chip
             label="Today"
             selected={!pickingDay && day === today}
@@ -515,8 +525,23 @@ function ExpenseForm({
         ) : null}
       </Section>
 
-      <Button title={existing ? 'Save changes' : 'Add expense'} disabled={!canSave} onPress={save} />
-      {existing ? <Button title="Delete expense" variant="ghost" onPress={onDelete} /> : null}
+      <View style={styles.actions}>
+        <Button
+          title={existing ? 'Save changes' : 'Add expense'}
+          iconName={existing ? 'checkmark' : 'add'}
+          disabled={!canSave}
+          onPress={save}
+        />
+        {existing ? (
+          <Button
+            title="Delete expense"
+            iconName="trash-outline"
+            variant="danger"
+            size="md"
+            onPress={onDelete}
+          />
+        ) : null}
+      </View>
     </ScreenScroll>
   );
 }
@@ -560,21 +585,36 @@ function SplitHint({
 
 const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
-  amount: { fontSize: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  personRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
-  person: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  // The amount is the point of the form: big, heavy, tabular.
+  amount: {
+    fontSize: 32,
+    minHeight: 64,
+    fontFamily: fontFor('800'),
+    letterSpacing: -0.8,
+    fontVariant: ['tabular-nums'],
+  },
+  people: {
+    borderRadius: radius.lg,
+    backgroundColor: t.colors.surface,
+    borderWidth: t.dark ? 1 : 0,
+    borderColor: t.colors.border,
+    paddingHorizontal: spacing.md,
+  },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56 },
+  personDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
+  person: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   shareInput: {
-    width: 84,
+    width: 80,
     minHeight: 40,
     paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: t.colors.border,
-    borderRadius: 10,
-    backgroundColor: t.colors.surface,
+    borderRadius: radius.sm,
+    backgroundColor: t.colors.surfaceSunken,
     color: t.colors.text,
     fontSize: 15,
+    fontFamily: fontFor('600'),
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
-  shareAmount: { width: 92, fontVariant: ['tabular-nums'] },
+  shareAmount: { width: 88, fontVariant: ['tabular-nums'] },
+  actions: { gap: spacing.sm, marginTop: spacing.xs },
 }));

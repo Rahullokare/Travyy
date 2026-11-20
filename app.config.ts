@@ -55,7 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png',
     name: 'Travyy',
     shortName: 'Travyy',
-    themeColor: '#FF5A36',
+    themeColor: '#D14318',
     backgroundColor: '#FAF7F2',
   },
   plugins: [

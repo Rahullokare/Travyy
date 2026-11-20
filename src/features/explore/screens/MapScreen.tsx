@@ -13,8 +13,18 @@ import { openInMaps } from '@/shared/lib/platform';
 import { useLayout } from '@/shared/lib/useLayout';
 import { useUserLocation } from '@/shared/lib/useUserLocation';
 import { Map, type MapHandle } from '@/shared/map';
-import { elevation, makeStyles, useTheme } from '@/shared/theme';
-import { Chip, ChipRow, EmptyState, Icon, IconButton, PressableScale, Text, useEntrance } from '@/shared/ui';
+import { makeStyles, radius, shadow, spacing, useTheme } from '@/shared/theme';
+import {
+  Chip,
+  ChipRow,
+  EmptyState,
+  Icon,
+  IconBadge,
+  IconButton,
+  PressableScale,
+  Text,
+  useEntrance,
+} from '@/shared/ui';
 import { cityOf, groupByCity, useAppStore } from '@/store';
 
 const NEARBY_RADIUS_M = 1500;
@@ -68,11 +78,19 @@ export function MapScreen() {
 
   const cityChips = (
     <ChipRow>
-      <Chip label="🌍 All" selected={!city} onPress={() => selectCity(undefined)} />
+      <Chip
+        label="All"
+        icon="globe-outline"
+        floating={!isWide}
+        selected={!city}
+        onPress={() => selectCity(undefined)}
+      />
       {cities.map((c) => (
         <Chip
           key={c.city}
-          label={`${c.city} · ${c.places.length}`}
+          label={`${c.city}  ${c.places.length}`}
+          accessibilityLabel={`${c.city}, ${c.places.length} spots`}
+          floating={!isWide}
           selected={city === c.city}
           onPress={() => selectCity(c.city)}
         />
@@ -83,14 +101,16 @@ export function MapScreen() {
   const selectedCard = selected ? (
     <PressableScale
       scale={0.98}
-      style={[styles.card, elevation(dark)]}
+      style={[styles.card, shadow('lg', dark)]}
       accessibilityRole="button"
       accessibilityLabel={`Open ${selected.name}`}
       onPress={() => router.push(`/place/${selected.id}`)}
     >
-      <View style={[styles.cardBadge, { backgroundColor: `${CATEGORY_META[selected.category].color}22` }]}>
-        <Text style={styles.cardEmoji}>{CATEGORY_META[selected.category].emoji}</Text>
-      </View>
+      <IconBadge
+        icon={CATEGORY_META[selected.category].icon}
+        color={CATEGORY_META[selected.category].color}
+        size={52}
+      />
       <View style={styles.flex}>
         <Text variant="heading" numberOfLines={1}>
           {selected.name}
@@ -125,13 +145,15 @@ export function MapScreen() {
     <PressableScale
       scale={0.98}
       accessibilityRole="button"
-      style={[styles.card, styles.cardInverse, elevation(dark)]}
+      style={[styles.card, styles.cardInverse, shadow('lg', dark)]}
       onPress={() => {
         setSelectedId(nearby[0].place.id);
         mapRef.current?.fitTo(nearby.slice(0, 5).map((n) => n.place));
       }}
     >
-      <Text style={styles.cardEmoji}>📍</Text>
+      <View style={styles.nearbyBadge}>
+        <Icon name="walk" size={24} color="onPrimary" />
+      </View>
       <View style={styles.flex}>
         <Text variant="heading" color="textInverse">
           {nearby.length === 1 ? 'A saved spot is nearby' : `${nearby.length} saved spots nearby`}
@@ -172,9 +194,9 @@ export function MapScreen() {
             <View style={styles.brandRow}>
               <Text style={styles.brand}>travyy</Text>
               <IconButton
-                icon="add-circle"
-                size={30}
-                color="primary"
+                icon="add"
+                variant="tinted"
+                color="primaryText"
                 accessibilityLabel="Save a spot"
                 onPress={() => router.push('/add')}
               />
@@ -191,7 +213,7 @@ export function MapScreen() {
               <PlaceRow place={item} onPress={focusPlace} selected={item.id === selectedId} />
             )}
             ListEmptyComponent={
-              <EmptyState emoji="🗺️" title="No spots yet" body="Save a reel to see it here." />
+              <EmptyState icon="map" title="No spots yet" body="Save a reel to see it here." />
             }
           />
         </View>
@@ -215,11 +237,17 @@ export function MapScreen() {
     <View style={styles.flex}>
       {map}
       <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <View style={[styles.headerPill, elevation(dark)]}>
+        <View style={[styles.headerPill, shadow('md', dark)]}>
           <Text style={styles.brand}>travyy</Text>
-          <Text variant="caption" style={[styles.bold, styles.tabular]}>
-            {places.length} saved · {places.filter((p) => p.visitedAt).length} visited
-          </Text>
+          <View style={styles.stats}>
+            <Text variant="caption" color="text" style={[styles.bold, styles.tabular]}>
+              {places.length} saved
+            </Text>
+            <View style={styles.dot} />
+            <Text variant="caption" style={[styles.bold, styles.tabular]}>
+              {places.filter((p) => p.visitedAt).length} visited
+            </Text>
+          </View>
         </View>
         {cityChips}
       </View>
@@ -232,13 +260,13 @@ export function MapScreen() {
             onPress={locate}
           />
           <PressableScale
-            style={[styles.fab, elevation(dark)]}
+            style={[styles.fab, shadow('lg', dark)]}
             pressedStyle={styles.fabPressed}
             accessibilityRole="button"
             accessibilityLabel="Save a spot"
             onPress={() => router.push('/add')}
           >
-            <Icon name="add" size={26} color="onPrimary" />
+            <Icon name="add" size={24} color="onPrimary" />
             <Text variant="bodyStrong" color="onPrimary" style={styles.fabLabel}>
               Save a spot
             </Text>
@@ -253,27 +281,39 @@ export function MapScreen() {
 const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
   split: { flex: 1, flexDirection: 'row', backgroundColor: t.colors.background },
-  panel: { width: SIDE_PANEL_WIDTH, borderRightWidth: 1, borderRightColor: t.colors.border, gap: 8 },
-  panelHeader: { paddingHorizontal: 16, gap: 2 },
+  panel: { width: SIDE_PANEL_WIDTH, borderRightWidth: 1, borderRightColor: t.colors.border, gap: spacing.sm },
+  panelHeader: { paddingHorizontal: spacing.gutter, gap: 2 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   wideOverlay: { position: 'absolute', right: 16, bottom: 16, left: 16, alignItems: 'flex-end', gap: 12 },
-  top: { position: 'absolute', top: 0, left: 0, right: 0, gap: 8 },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, gap: 10 },
   headerPill: {
-    marginHorizontal: 16,
+    marginHorizontal: spacing.gutter,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: t.colors.overlay,
-    borderRadius: 999,
-    borderWidth: 1,
+    borderRadius: radius.pill,
+    borderWidth: t.dark ? 1 : 0,
     borderColor: t.colors.border,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingLeft: 20,
+    paddingRight: 16,
+    height: 52,
   },
-  brand: { fontSize: 22, fontWeight: '900', color: t.colors.primary, letterSpacing: -0.5 },
+  brand: { fontSize: 23, fontWeight: '800', color: t.colors.primary, letterSpacing: -0.9 },
+  stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: t.colors.textSubtle },
   bold: { fontWeight: '600' },
   tabular: { fontVariant: ['tabular-nums'] },
-  bottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 12, alignItems: 'center' },
+  bottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: spacing.gutter,
+    paddingBottom: spacing.lg,
+    gap: 12,
+    alignItems: 'center',
+  },
   fabRow: {
     width: '100%',
     maxWidth: 520,
@@ -286,33 +326,40 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: 6,
     backgroundColor: t.colors.primary,
-    paddingHorizontal: 24,
-    height: 52,
-    borderRadius: 999,
+    paddingLeft: 20,
+    paddingRight: 24,
+    height: 54,
+    borderRadius: radius.pill,
   },
   fabPressed: { backgroundColor: t.colors.primaryPressed },
-  fabLabel: { fontSize: 16, letterSpacing: -0.2 },
+  fabLabel: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   cardSlot: { width: '100%', maxWidth: 520 },
   card: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: t.colors.surface,
-    borderRadius: 24,
-    borderWidth: 1,
+    gap: 14,
+    backgroundColor: t.colors.surfaceRaised,
+    borderRadius: radius.xl,
+    borderWidth: t.dark ? 1 : 0,
     borderColor: t.colors.border,
     padding: 14,
   },
   cardInverse: { backgroundColor: t.colors.surfaceInverse, borderColor: t.colors.surfaceInverse },
-  cardBadge: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cardEmoji: { fontSize: 26, lineHeight: 32 },
+  nearbyBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 17,
+    backgroundColor: t.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   note: { marginTop: 6, fontStyle: 'italic' },
   goButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: t.colors.accent,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: t.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

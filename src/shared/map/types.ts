@@ -7,8 +7,10 @@ export interface MapMarker {
   coordinate: LatLng;
   /** Pin background colour. */
   color: string;
-  /** Short glyph rendered in the pin: an emoji, a stop number or a check mark. */
-  label: string;
+  /** An Ionicons name drawn white in the pin (a category). Wins over `label`. */
+  icon?: string;
+  /** Short text rendered in the pin when there's no icon, such as a stop number. */
+  label?: string;
   selected?: boolean;
   accessibilityLabel?: string;
 }
