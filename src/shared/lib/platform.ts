@@ -44,7 +44,7 @@ export async function shareText(text: string, title?: string): Promise<void> {
         await navigator.share({ title, text });
       } else {
         await navigator.clipboard.writeText(text);
-        notify('Copied to clipboard', 'Paste it anywhere to share your trip.');
+        notify('Copied to clipboard', 'Paste it anywhere to share it.');
       }
       return;
     }
