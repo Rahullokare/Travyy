@@ -27,11 +27,20 @@ export type SourcePlatform = z.infer<typeof SourcePlatformSchema>;
 const Latitude = z.number().min(-90).max(90);
 const Longitude = z.number().min(-180).max(180);
 
+// `.catch` rather than failing: a bad code must never cost someone the saved place it came with.
+const CountryCode = z
+  .string()
+  .regex(/^[A-Z]{2}$/)
+  .optional()
+  .catch(undefined);
+
 export const PlaceSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   city: z.string().optional(),
   country: z.string().optional(),
+  /** ISO 3166-1 alpha-2. What the vault groups by, so one country is one folder whatever it was called. */
+  countryCode: CountryCode,
   category: CategorySchema,
   lat: Latitude,
   lng: Longitude,
@@ -41,11 +50,29 @@ export const PlaceSchema = z.object({
   sourcePlatform: SourcePlatformSchema,
   savedAt: z.number(),
   visitedAt: z.number().optional(),
+  /** Marked ❤. Separate from visited: you can love a place you haven't been to yet. */
+  likedAt: z.number().optional(),
 });
 export type Place = z.infer<typeof PlaceSchema>;
 
 /** What callers provide when saving; the store assigns identity and timestamps. */
-export type NewPlace = Omit<Place, 'id' | 'savedAt' | 'visitedAt'>;
+export type NewPlace = Omit<Place, 'id' | 'savedAt' | 'visitedAt' | 'likedAt'>;
+
+/**
+ * A vault the person made: "Cafés to try", "Goa weekend". It holds references, not copies, so a
+ * place can sit in several vaults and deleting a vault never deletes a place.
+ */
+export const VaultSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(60),
+  /** One emoji shown on the vault's tile. */
+  emoji: z.string().max(16).optional(),
+  /** Newest first. May name places since deleted on another phone: readers skip those. */
+  placeIds: z.array(z.string()),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type Vault = z.infer<typeof VaultSchema>;
 
 export const TripDaySchema = z.object({
   day: z.number().int().positive(),
@@ -59,6 +86,8 @@ export const TripSchema = z.object({
   city: z.string(),
   days: z.array(TripDaySchema).min(1),
   createdAt: z.number(),
+  /** Added from a link someone shared. Doesn't count against the free plan's trips. */
+  shared: z.boolean().optional(),
 });
 export type Trip = z.infer<typeof TripSchema>;
 
@@ -67,6 +96,7 @@ export const CandidateSchema = z.object({
   name: z.string().min(1),
   city: z.string().optional(),
   country: z.string().optional(),
+  countryCode: CountryCode,
   category: CategorySchema,
   lat: Latitude.optional(),
   lng: Longitude.optional(),
