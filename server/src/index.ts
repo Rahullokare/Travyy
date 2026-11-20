@@ -171,6 +171,7 @@ async function handleExtract(req: IncomingMessage, res: ServerResponse) {
         name: p.name,
         city: p.city ?? hit?.city ?? undefined,
         country: p.country ?? hit?.country ?? undefined,
+        countryCode: hit?.countryCode,
         category: p.category,
         confidence: Math.min(1, Math.max(0, hit ? p.confidence : p.confidence * 0.5)),
         lat: hit?.lat,

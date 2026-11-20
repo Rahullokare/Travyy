@@ -1,11 +1,12 @@
 # Travyy
 
-**Turn travel reels into real trips.** Paste an Instagram Reel, TikTok, YouTube or Google Maps link. Travyy finds every place mentioned, pins it on your map, and turns a city's saves into a day-by-day walking plan.
+**The group trip app: from the reel in the group chat to the last rupee settled.** Share an Instagram Reel, TikTok, YouTube or Google Maps link. Travyy finds every place mentioned, pins it on your map, turns a city's saves into a day-by-day walking plan you can send as a link, and splits the trip's costs.
 
 One codebase for **iOS, Android and web** (Expo SDK 58 · React Native 0.88 · React 19 · TypeScript).
 
 - Product research and go-to-market: [`docs/RESEARCH.md`](docs/RESEARCH.md)
 - Architecture and technical decisions: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Backend, database and scaling guide: [`docs/BACKEND.md`](docs/BACKEND.md)
 
 ## Quick start
 
@@ -50,11 +51,16 @@ On a phone there are two options:
 - **Share to Travyy:** tap Share in Instagram, TikTok, YouTube, Google Maps or a browser and pick Travyy. The app opens straight into place extraction. Uses `expo-sharing`'s iOS share extension and Android share intent, plus a Web Share Target when the web app is installed. A share that arrives before onboarding is held and delivered right after.
 - **Save from any link:** paste an Instagram, TikTok, YouTube or Google Maps link, a caption, or a place name, with a review step before anything is saved.
 - **Map of everything you've saved:** category-coloured pins and city filters, on MapLibre with free OpenFreeMap tiles everywhere (no Google key). On desktop and tablets you get a split list + map layout.
-- **Saves list:** grouped by city, with search, category filters, "hide visited" and "sort by nearest".
+- **Saves vault:** countries, then cities, then spots grouped by category, so a hundred saves is still a short screen. Search at every level ignores accents and word order ("cafe goa"); in a city you can sort by nearest and hide visited.
+- **Your vaults:** make collections like "Cafés to try" or "Goa weekend", each with its own map, a visited progress bar and one-tap trip planning. Pick a vault while saving from a reel, and ❤ spots to fill the Liked vault.
+- **Share a vault:** send a copy as a link that opens on a map in any browser, or invite friends to build it together, with everyone's spots synced to everyone's phone.
 - **Auto trip planner:** groups spots by neighbourhood into balanced days and orders each day as a walking route, then hands off to Google Maps.
 - **Saved spots nearby:** a banner when you're close to something you saved.
 - **Visited tracking, visit-rate stats and a travel-personality card.**
-- **Share trips** as text with map links (native share sheet, Web Share API, or clipboard).
+- **Share a trip as a link** that opens on a map in any browser, with one tap to add it to the visitor's own Travyy. No account or server involved: the plan travels inside the link. Falls back to text with map links.
+- **Split costs** per trip in any currency, offline, with no limits (see `docs/ARCHITECTURE.md`, 16).
+- **Book ahead:** partner links for tickets, tours and stays on saved places and trips, labelled as such.
+- **Plans:** saving, splitting and sharing are free without limits; the free plan includes 15 AI imports a month and one planned trip; Trip Pass and Pro lift those. Purchases run in preview mode until store billing is connected.
 - **Light and dark mode**, accessible labels and roles, responsive layouts.
 - **Local-first:** works without an account. Data is validated and versioned on the device.
 
@@ -67,6 +73,9 @@ Copy `.env.example` to `.env.local`:
 | `EXPO_PUBLIC_API_URL` | Travyy API for AI extraction (optional; without it extraction runs on-device) |
 | `EXPO_PUBLIC_MAP_STYLE_URL` | MapLibre style for the web map (defaults to OpenFreeMap, free, no key) |
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase project for sign-in (optional; without them the app has no accounts). The anon key is public by design; never use the `service_role` key |
+| `EXPO_PUBLIC_WEB_URL` | Where the web build is hosted, so phones can share a trip as a link (optional; without it phones share text) |
+| `EXPO_PUBLIC_GYG_PARTNER_ID`, `EXPO_PUBLIC_BOOKING_AID` | GetYourGuide and Booking.com partner IDs for booking links (optional; links work without them, unpaid) |
+| `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_POSTHOG_HOST` | PostHog project for product analytics (optional; off without a key) |
 | `APP_VARIANT` | `development` / `preview` / `production`: app name, bundle ID and scheme, so builds install side by side |
 
 `EXPO_PUBLIC_*` values are bundled into the app. Never put secrets in them.
@@ -157,7 +166,8 @@ The web app is a static SPA: `npm run build:web`, then deploy `dist/` to any sta
 
 ## Roadmap (next)
 
-1. **Paid hosting when usage grows:** a paid Render instance (no sleeping), plus Claude or a paid Gemini tier when the free AI limits run out.
-2. **Billing:** RevenueCat behind `useEntitlements()` (the paywall UI is built; purchases are in demo mode).
-3. **Cloud sync** of saves and trips for signed-in users (Supabase tables with row-level security), and Google / Apple sign-in. Email sign-in is built.
-4. **Crash reporting and analytics:** Sentry and PostHog behind the existing `logger`/`track` seams.
+1. **Store billing:** a RevenueCat provider behind `features/paywall/billing.ts` (the plans, paywall and limits are built; purchases are in preview mode and refuse to run in production builds).
+2. **Live group trips:** Supabase tables with row-level security, so a shared link becomes a shared space where everyone adds spots and costs. Then voting on spots.
+3. **Partner accounts:** apply to the GetYourGuide and Booking.com programmes and set the two IDs.
+4. **Paid hosting when usage grows:** a paid Render instance (no sleeping), plus a paid AI tier when the free limits run out.
+5. **Crash reporting** (Sentry behind `logger`) and **nearby alerts** in the background.

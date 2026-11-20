@@ -45,3 +45,7 @@ coverage/
 
 # local env
 .env
+
+# Supabase CLI state
+supabase/.temp/
+supabase/.branches/

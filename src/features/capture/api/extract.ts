@@ -22,6 +22,8 @@ export interface ExtractionResult {
   candidates: Candidate[];
   /** Which engine produced the result — shown to the user for transparency. */
   engine: ExtractionEngine;
+  /** AI was available but left out because the free plan's monthly imports are used up. */
+  aiLimited?: boolean;
 }
 
 export interface ExtractionInput {
@@ -42,7 +44,21 @@ const ApiResponseSchema = z.object({
  *  3. On-device rules + OpenStreetMap geocoding (always available).
  *  4. A bare place name falls back to place search.
  */
-export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal): Promise<ExtractionResult> {
+export async function extractPlaces(
+  input: ExtractionInput,
+  signal?: AbortSignal,
+  options: { ai?: boolean } = {},
+): Promise<ExtractionResult> {
+  const result = await run(input, signal, options.ai !== false);
+  const aiLimited = options.ai === false && !!env.apiUrl && result.engine === 'rules';
+  return aiLimited ? { ...result, aiLimited } : result;
+}
+
+async function run(
+  input: ExtractionInput,
+  signal: AbortSignal | undefined,
+  ai: boolean,
+): Promise<ExtractionResult> {
   const url = extractUrl(input.url ?? '') ?? extractUrl(input.text ?? '');
   const typed = input.text?.replace(url ?? '', '').trim() || undefined;
   const platform: SourcePlatform = url ? detectPlatform(url) : 'manual';
@@ -70,7 +86,7 @@ export async function extractPlaces(input: ExtractionInput, signal?: AbortSignal
 
   if (env.apiUrl) {
     // Skip a server known to have no AI (the free setup): waking it would only get a 503.
-    if ((await apiHasAi()) !== false) {
+    if (ai && (await apiHasAi()) !== false) {
       try {
         const res = ApiResponseSchema.parse(
           await fetchJson(`${env.apiUrl}/extract`, {
@@ -147,6 +163,7 @@ async function fromMapsLink(url: string, signal?: AbortSignal): Promise<Candidat
         lng: info.lng,
         city: where?.city,
         country: where?.country,
+        countryCode: where?.countryCode,
         address: where?.address,
         category: guessCategory(name),
         confidence: 0.95,

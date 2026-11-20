@@ -7,6 +7,8 @@ import { cubicBezier, useReducedMotion, type CSSAnimationProperties } from 'reac
 
 /** Strong ease-out: instant response, soft landing. The default for anything entering or reacting. */
 export const EASE_OUT = cubicBezier(0.23, 1, 0.32, 1);
+/** For things moving between two on-screen positions (sliding indicators). */
+export const EASE_IN_OUT = cubicBezier(0.77, 0, 0.175, 1);
 
 export const duration = {
   /** Press feedback. */
@@ -26,6 +28,11 @@ const entrances = {
   slide: {
     from: { opacity: 0, transform: [{ translateX: 16 }] },
     to: { opacity: 1, transform: [{ translateX: 0 }] },
+  },
+  /** Content settling in under a header: a few points of lift, mostly opacity. */
+  settle: {
+    from: { opacity: 0, transform: [{ translateY: 6 }] },
+    to: { opacity: 1, transform: [{ translateY: 0 }] },
   },
 } as const;
 

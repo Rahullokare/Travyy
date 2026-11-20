@@ -6,7 +6,7 @@ export default function NotFound() {
     <Screen>
       <Stack.Screen options={{ title: 'Not found' }} />
       <EmptyState
-        emoji="🧭"
+        icon="compass"
         title="This page wandered off"
         body="The link may be old or mistyped."
         action={

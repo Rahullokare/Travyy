@@ -79,6 +79,8 @@ export interface GeoHit {
   address: string;
   city?: string;
   country?: string;
+  /** ISO 3166-1 alpha-2, upper case. */
+  countryCode?: string;
 }
 
 const cache = new Map<string, GeoHit | null>();
@@ -103,7 +105,13 @@ export async function geocode(query: string): Promise<GeoHit | undefined> {
           lat: string;
           lon: string;
           display_name: string;
-          address?: { city?: string; town?: string; village?: string; country?: string };
+          address?: {
+            city?: string;
+            town?: string;
+            village?: string;
+            country?: string;
+            country_code?: string;
+          };
         }[])
       : [];
     const result: GeoHit | null = hit
@@ -113,6 +121,9 @@ export async function geocode(query: string): Promise<GeoHit | undefined> {
           address: hit.display_name,
           city: hit.address?.city ?? hit.address?.town ?? hit.address?.village,
           country: hit.address?.country,
+          countryCode: /^[a-z]{2}$/i.test(hit.address?.country_code ?? '')
+            ? hit.address!.country_code!.toUpperCase()
+            : undefined,
         }
       : null;
     cache.set(key, result);

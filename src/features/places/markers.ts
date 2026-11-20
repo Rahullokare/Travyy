@@ -2,7 +2,7 @@ import type { Place } from '@/domain/models';
 import type { MapMarker } from '@/shared/map';
 import { CATEGORY_META } from './categories';
 
-const VISITED_COLOR = '#1FA971';
+const VISITED_COLOR = '#22945F';
 
 export function placeToMarker(place: Place, selected = false): MapMarker {
   const meta = CATEGORY_META[place.category];
@@ -10,7 +10,7 @@ export function placeToMarker(place: Place, selected = false): MapMarker {
     id: place.id,
     coordinate: { lat: place.lat, lng: place.lng },
     color: place.visitedAt ? VISITED_COLOR : meta.color,
-    label: place.visitedAt ? '✓' : meta.emoji,
+    icon: place.visitedAt ? 'checkmark' : meta.icon,
     selected,
     accessibilityLabel: `${place.name}, ${meta.label}${place.visitedAt ? ', visited' : ''}`,
   };

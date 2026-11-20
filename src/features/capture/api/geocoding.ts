@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { z } from 'zod';
+import { normalizeCountryCode } from '@/domain/countries';
 import type { Candidate, Category, LatLng } from '@/domain/models';
 import { guessCategory } from '@/features/places/categories';
 import { fetchWithTimeout } from '@/shared/lib/http';
@@ -29,6 +30,7 @@ const HitSchema = z.object({
       village: z.string().optional(),
       suburb: z.string().optional(),
       country: z.string().optional(),
+      country_code: z.string().optional(),
     })
     .optional(),
 });
@@ -57,6 +59,7 @@ function toCandidate(hit: Hit, confidence: number): Candidate {
     address: hit.display_name,
     city: cityOf(hit.address),
     country: hit.address?.country,
+    countryCode: normalizeCountryCode(hit.address?.country_code),
     category:
       categoryFromOsm(hit) ?? guessCategory(`${hit.display_name} ${hit.type ?? ''} ${hit.category ?? ''}`),
     confidence,
@@ -168,7 +171,12 @@ export async function reverseGeocode(point: LatLng, signal?: AbortSignal) {
     const hit = HitSchema.parse(
       await politeGet(`/reverse?format=jsonv2&addressdetails=1&lat=${point.lat}&lon=${point.lng}`, signal),
     );
-    return { city: cityOf(hit.address), country: hit.address?.country, address: hit.display_name };
+    return {
+      city: cityOf(hit.address),
+      country: hit.address?.country,
+      countryCode: normalizeCountryCode(hit.address?.country_code),
+      address: hit.display_name,
+    };
   } catch {
     return undefined;
   }
@@ -196,6 +204,7 @@ export async function geocodeCandidates(
           address: found.address,
           city: c.city ?? found.city ?? options.cityHint,
           country: c.country ?? found.country,
+          countryCode: c.countryCode ?? found.countryCode,
           // A name that says what it is ("Railay Beach") wins; otherwise trust OSM over the caption text around it.
           category: guessCategory(c.name) === 'other' ? (categoryFromOsm(hit) ?? c.category) : c.category,
         });

@@ -1,17 +1,22 @@
 import { CATEGORIES, type Category } from '@/domain/models';
+import type { IconName } from '@/shared/ui';
 
 export { CATEGORIES };
 
-export const CATEGORY_META: Record<Category, { label: string; emoji: string; color: string }> = {
-  food: { label: 'Food', emoji: '🍜', color: '#F0643C' },
-  cafe: { label: 'Café', emoji: '☕', color: '#A0673C' },
-  nightlife: { label: 'Nightlife', emoji: '🍸', color: '#8B5CF6' },
-  sight: { label: 'Sights', emoji: '🏛️', color: '#2F7DF6' },
-  nature: { label: 'Nature', emoji: '🌿', color: '#1FA971' },
-  stay: { label: 'Stays', emoji: '🛏️', color: '#E0A100' },
-  shopping: { label: 'Shopping', emoji: '🛍️', color: '#E2508C' },
-  activity: { label: 'Activities', emoji: '🎟️', color: '#0EA5A5' },
-  other: { label: 'Other', emoji: '📍', color: '#6B7280' },
+/**
+ * One hue per category, matched in saturation so a list of mixed spots reads as one palette.
+ * Each is legible as an icon on its own 12% tint and as a white-icon map pin.
+ */
+export const CATEGORY_META: Record<Category, { label: string; icon: IconName; color: string }> = {
+  food: { label: 'Food', icon: 'fast-food', color: '#E0532A' },
+  cafe: { label: 'Café', icon: 'cafe', color: '#9A6236' },
+  nightlife: { label: 'Nightlife', icon: 'wine', color: '#7B5BE0' },
+  sight: { label: 'Sights', icon: 'camera', color: '#2F6FE0' },
+  nature: { label: 'Nature', icon: 'leaf', color: '#22945F' },
+  stay: { label: 'Stays', icon: 'bed', color: '#C98A0C' },
+  shopping: { label: 'Shopping', icon: 'bag-handle', color: '#D2457E' },
+  activity: { label: 'Activities', icon: 'ticket', color: '#11948A' },
+  other: { label: 'Other', icon: 'location', color: '#6B7280' },
 };
 
 const KEYWORDS: [Category, RegExp][] = [

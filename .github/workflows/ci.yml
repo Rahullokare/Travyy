@@ -27,6 +27,24 @@ jobs:
       - name: Bundle web, Android and iOS
         run: npx expo export --platform web --platform android --platform ios --output-dir dist
 
+  database:
+    name: Database (security rules)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: supabase/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # Applies every migration to an in-process Postgres and tries to break each access rule.
+      - run: npm test
+
   server:
     name: API server (typecheck · test)
     runs-on: ubuntu-latest

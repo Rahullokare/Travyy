@@ -6,4 +6,8 @@ ios
 android
 package-lock.json
 server/node_modules
+supabase/node_modules
 *.md
+
+# Supabase CLI state (linked project, versions)
+supabase/.temp/

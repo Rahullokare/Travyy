@@ -1,209 +1,288 @@
-import { FlashList } from '@shopify/flash-list';
-import { router, Stack } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { TextInput, View } from 'react-native';
-import type { Category, Place } from '@/domain/models';
-import { distanceMeters, formatDistance } from '@/shared/lib/geo';
-import { useUserLocation } from '@/shared/lib/useUserLocation';
-import { CONTENT_MAX_WIDTH, lift, makeStyles, useTheme } from '@/shared/theme';
-import { Button, Chip, ChipRow, EmptyState, Icon, IconButton, Screen, Text } from '@/shared/ui';
-import { groupByCity, useAppStore } from '@/store';
-import { CATEGORIES, CATEGORY_META } from '../categories';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { flagOf } from '@/domain/countries';
+import type { Category } from '@/domain/models';
+import { CONTENT_MAX_WIDTH, lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
+import {
+  Button,
+  Chip,
+  ChipRow,
+  EmptyState,
+  Icon,
+  IconButton,
+  PressableScale,
+  Screen,
+  ScreenHeader,
+  Text,
+} from '@/shared/ui';
+import { cityOf, useAppStore } from '@/store';
+import { CATEGORY_META } from '../categories';
 import { PlaceRow } from '../components/PlaceRow';
+import { SearchField } from '../components/SearchField';
+import { SpotList, type SpotSection } from '../components/SpotList';
+import { VaultCard } from '../components/VaultCard';
+import {
+  categoryCounts,
+  groupByCountry,
+  plural,
+  searchSaves,
+  UNKNOWN_COUNTRY,
+  type CountryGroup,
+} from '../vault';
+import { vaultSummaries } from '../vaults';
 
-type Sort = 'city' | 'nearest';
-type Row =
-  | { type: 'header'; key: string; title: string; subtitle: string }
-  | { type: 'place'; key: string; place: Place };
+const RECENT = 4;
+const categoryLabel = (c: Category) => CATEGORY_META[c].label;
 
+export function openCountry(group: CountryGroup) {
+  // A country with one city has nothing to choose between: go straight to its spots.
+  if (group.cities.length === 1) {
+    router.push({
+      pathname: '/vault/[country]/[city]',
+      params: { country: group.country, city: group.cities[0].city },
+    });
+  } else {
+    router.push({ pathname: '/vault/[country]', params: { country: group.country } });
+  }
+}
+
+/**
+ * The saves vault's front door. Countries are the folders, so a hundred saves is still a short
+ * screen; the search box and category chips cut across every country at once.
+ */
 export function SavesScreen() {
   const styles = useStyles();
-  const { colors, dark } = useTheme();
-  const [searchFocused, setSearchFocused] = useState(false);
+  const { dark } = useTheme();
   const places = useAppStore((s) => s.places);
+  const vaults = useAppStore((s) => s.vaults);
+  const shared = useAppStore((s) => s.shared);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<Category>();
-  const [hideVisited, setHideVisited] = useState(false);
-  const [sort, setSort] = useState<Sort>('city');
-  const { location, request } = useUserLocation();
+  const searching = !!query.trim() || !!category;
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return places.filter(
-      (p) =>
-        (!category || p.category === category) &&
-        (!hideVisited || !p.visitedAt) &&
-        (!q || [p.name, p.city, p.country, p.note].some((f) => f?.toLowerCase().includes(q))),
+  const countries = useMemo(() => groupByCountry(places), [places]);
+  const categories = useMemo(() => categoryCounts(places), [places]);
+  const yours = useMemo(() => vaultSummaries(vaults, places), [vaults, places]);
+  const recent = useMemo(() => [...places].sort((a, b) => b.savedAt - a.savedAt).slice(0, RECENT), [places]);
+  const results = useMemo<SpotSection[]>(() => {
+    if (!searching) return [];
+    const matches = searchSaves(
+      category ? places.filter((p) => p.category === category) : places,
+      query,
+      categoryLabel,
     );
-  }, [places, query, category, hideVisited]);
+    // searchSaves ranks best-first; grouping keeps that order inside each country.
+    return groupByCountry(matches).map((g) => ({
+      key: g.country,
+      title: g.country,
+      subtitle: plural(g.spots, 'spot'),
+      places: matches.filter((p) => g.cities.some((c) => c.places.includes(p))),
+    }));
+  }, [searching, places, category, query]);
 
-  // FlashList has no sections: flatten into typed rows (headers + places) instead.
-  const rows = useMemo<Row[]>(() => {
-    if (sort === 'nearest' && location) {
-      const sorted = [...filtered].sort((a, b) => distanceMeters(location, a) - distanceMeters(location, b));
-      return [
-        { type: 'header', key: 'h-near', title: 'Nearest to you', subtitle: `${sorted.length} spots` },
-        ...sorted.map((place): Row => ({ type: 'place', key: place.id, place })),
-      ];
-    }
-    return groupByCity(filtered).flatMap((g): Row[] => [
-      {
-        type: 'header',
-        key: `h-${g.city}`,
-        title: g.city,
-        subtitle: `${g.places.length} spot${g.places.length === 1 ? '' : 's'} · ${g.visited} visited`,
-      },
-      ...g.places.map((place): Row => ({ type: 'place', key: place.id, place })),
-    ]);
-  }, [filtered, sort, location]);
-
-  const openPlace = useCallback((p: Place) => router.push(`/place/${p.id}`), []);
-  const usedCategories = CATEGORIES.filter((c) => places.some((p) => p.category === c));
-
-  const header = (
-    <View style={styles.header}>
-      <View style={[styles.search, lift(dark), searchFocused && styles.searchFocused]}>
-        <Icon name="search" size={18} color="textMuted" />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search saves, cities, notes"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Search saves"
-          style={styles.searchInput}
-          returnKeyType="search"
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-        />
-        {query ? (
-          <IconButton
-            icon="close-circle"
-            size={18}
-            color="textMuted"
-            accessibilityLabel="Clear search"
-            onPress={() => setQuery('')}
-          />
-        ) : null}
-      </View>
-      <ChipRow>
-        <Chip
-          label={sort === 'nearest' ? '📍 Nearest' : '🏙️ By city'}
-          selected
-          color={colors.accent}
-          onPress={async () => {
-            if (sort === 'nearest') return setSort('city');
-            if (location || (await request())) setSort('nearest');
-          }}
-        />
-        <Chip label="Hide visited" selected={hideVisited} onPress={() => setHideVisited(!hideVisited)} />
-        {usedCategories.map((c) => (
-          <Chip
-            key={c}
-            label={`${CATEGORY_META[c].emoji} ${CATEGORY_META[c].label}`}
-            selected={category === c}
-            color={CATEGORY_META[c].color}
-            onPress={() => setCategory(category === c ? undefined : c)}
-          />
-        ))}
-      </ChipRow>
-    </View>
-  );
+  const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
+  const known = countries.filter((c) => c.country !== UNKNOWN_COUNTRY).length;
 
   return (
     <Screen>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <View style={styles.headerAction}>
-              <IconButton
-                icon="add-circle"
-                size={28}
-                color="primary"
-                accessibilityLabel="Save a spot"
-                onPress={() => router.push('/add')}
-              />
-            </View>
-          ),
-        }}
+      <ScreenHeader
+        title="Saves"
+        subtitle={
+          places.length
+            ? [
+                plural(places.length, 'spot'),
+                known ? plural(known, 'country', 'countries') : undefined,
+                plural(cityCount, 'city', 'cities'),
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
+        right={
+          <IconButton
+            icon="add"
+            variant="tinted"
+            color="primaryText"
+            accessibilityLabel="Save a spot"
+            onPress={() => router.push('/add')}
+          />
+        }
       />
       {places.length === 0 ? (
         <EmptyState
-          emoji="🔖"
+          icon="bookmark"
           title="Nothing saved yet"
           body="Copy the link of any travel reel, TikTok or Google Maps place and paste it here."
-          action={<Button title="Save your first spot" onPress={() => router.push('/add')} />}
+          action={<Button title="Save your first spot" iconName="add" onPress={() => router.push('/add')} />}
         />
       ) : (
-        <FlashList
-          data={rows}
-          keyExtractor={(r) => r.key}
-          getItemType={(r) => r.type}
-          ListHeaderComponent={header}
-          ListEmptyComponent={
-            <EmptyState emoji="🔍" title="No matches" body="Try a different search or filter." />
-          }
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) =>
-            item.type === 'header' ? (
-              <View style={[styles.column, styles.sectionHeader]}>
-                <Text variant="heading">{item.title}</Text>
-                <Text variant="caption" style={styles.tabular}>
-                  {item.subtitle}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.column}>
-                <PlaceRow
-                  place={item.place}
-                  onPress={openPlace}
-                  subtitle={
-                    sort === 'nearest' && location
-                      ? `${CATEGORY_META[item.place.category].label} · ${formatDistance(distanceMeters(location, item.place))} away`
-                      : undefined
-                  }
+        <>
+          {/* Outside the lists, so the keyboard stays up when the first letter swaps folders for results. */}
+          <View style={styles.tools}>
+            <View style={styles.search}>
+              <SearchField value={query} onChange={setQuery} placeholder="Search every spot you’ve saved" />
+            </View>
+            <ChipRow>
+              {categories.map(([c, n]) => (
+                <Chip
+                  key={c}
+                  label={`${CATEGORY_META[c].label} ${n}`}
+                  accessibilityLabel={`${CATEGORY_META[c].label}, ${plural(n, 'spot')}`}
+                  icon={CATEGORY_META[c].icon}
+                  selected={category === c}
+                  color={CATEGORY_META[c].color}
+                  onPress={() => setCategory(category === c ? undefined : c)}
                 />
+              ))}
+            </ChipRow>
+          </View>
+          {searching ? (
+            <SpotList
+              sections={results}
+              subtitleFor={(p) => `${CATEGORY_META[p.category].label} · ${cityOf(p)}`}
+              emptyBody="Nothing in your saves matches. Check the spelling, or clear the filter."
+            />
+          ) : (
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+              <View style={styles.labelRow}>
+                <Text variant="label" color="textMuted" style={[styles.label, styles.flex]}>
+                  Your vaults
+                </Text>
+                <PressableScale
+                  onPress={() => router.push('/vaults/new')}
+                  accessibilityRole="button"
+                  accessibilityLabel="New vault"
+                  hitSlop={10}
+                  scale={0.95}
+                  style={styles.newVault}
+                >
+                  <Icon name="add" size={16} color="primaryText" />
+                  <Text variant="callout" color="primaryText" style={styles.newVaultLabel}>
+                    New
+                  </Text>
+                </PressableScale>
               </View>
-            )
-          }
-        />
+              {yours.map((v) => (
+                <VaultCard
+                  key={v.id}
+                  title={v.name}
+                  flag={v.emoji}
+                  meta={
+                    v.cities.length
+                      ? `${plural(v.places.length, 'spot')} · ${plural(v.cities.length, 'city', 'cities')}`
+                      : plural(v.places.length, 'spot')
+                  }
+                  detail={
+                    [
+                      shared[v.id] ? `👥 ${plural(shared[v.id].people ?? 1, 'person', 'people')}` : undefined,
+                      v.cities.join(', '),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || undefined
+                  }
+                  visited={v.visited}
+                  total={v.places.length}
+                  onPress={() => router.push({ pathname: '/vaults/[id]', params: { id: v.id } })}
+                />
+              ))}
+              {vaults.length === 0 ? (
+                <PressableScale
+                  scale={0.98}
+                  style={styles.vaultPrompt}
+                  onPress={() => router.push('/vaults/new')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Make your first vault"
+                >
+                  <Text style={styles.promptEmoji} accessibilityElementsHidden>
+                    ☕
+                  </Text>
+                  <View style={styles.flex}>
+                    <Text variant="bodyStrong">Make a vault</Text>
+                    <Text variant="caption">
+                      Cafés to try, a weekend away, date nights. Each one gets its own map.
+                    </Text>
+                  </View>
+                  <Icon name="chevron-forward" size={18} color="primaryText" />
+                </PressableScale>
+              ) : null}
+              <Text variant="label" color="textMuted" style={[styles.label, styles.recentLabel]}>
+                Countries
+              </Text>
+              {countries.map((g) => (
+                <VaultCard
+                  key={g.country}
+                  title={g.country}
+                  flag={flagOf(g.code)}
+                  meta={`${plural(g.spots, 'spot')} · ${plural(g.cities.length, 'city', 'cities')}`}
+                  detail={g.cities.map((c) => c.city).join(', ')}
+                  visited={g.visited}
+                  total={g.spots}
+                  onPress={() => openCountry(g)}
+                />
+              ))}
+              <Text variant="label" color="textMuted" style={[styles.label, styles.recentLabel]}>
+                Recently saved
+              </Text>
+              <View style={[styles.group, lift(dark)]}>
+                {recent.map((p, i) => (
+                  <View key={p.id}>
+                    {i > 0 ? <View style={styles.separator} /> : null}
+                    <PlaceRow
+                      place={p}
+                      subtitle={`${CATEGORY_META[p.category].label} · ${cityOf(p)}`}
+                      onPress={() => router.push(`/place/${p.id}`)}
+                    />
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+        </>
       )}
     </Screen>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  header: {
-    gap: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+  tools: {
+    gap: spacing.md,
+    paddingBottom: spacing.md,
     width: '100%',
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
   },
-  headerAction: { paddingHorizontal: 12 },
-  search: {
-    marginHorizontal: 16,
+  search: { paddingHorizontal: spacing.gutter },
+  content: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxxl,
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  flex: { flex: 1 },
+  label: { paddingHorizontal: 4 },
+  labelRow: { flexDirection: 'row', alignItems: 'center' },
+  newVault: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4 },
+  newVaultLabel: { fontWeight: '600' },
+  vaultPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: t.colors.primarySoft,
+  },
+  promptEmoji: { fontSize: 28, lineHeight: 36 },
+  recentLabel: { marginTop: spacing.md },
+  group: {
+    borderRadius: radius.lg,
     backgroundColor: t.colors.surface,
-    borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: t.dark ? 1 : 0,
     borderColor: t.colors.border,
-    paddingHorizontal: 16,
-    height: 46,
+    overflow: 'hidden',
   },
-  searchFocused: { borderColor: t.colors.primary },
-  searchInput: { flex: 1, fontSize: 16, color: t.colors.text, height: '100%', outlineWidth: 0 },
-  tabular: { fontVariant: ['tabular-nums'] },
-  column: { width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 28,
-    paddingBottom: 6,
-  },
-  listContent: { paddingBottom: 32 },
+  separator: { height: 1, marginLeft: 72, backgroundColor: t.colors.border },
 }));

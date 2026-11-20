@@ -3,18 +3,34 @@ import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORIES, CATEGORY_META } from '@/features/places/categories';
-import { useEntitlements } from '@/features/paywall/entitlements';
+import { DEFAULT_VAULT_EMOJI } from '@/features/places/vaults';
+import { currentEntitlements } from '@/features/paywall/entitlements';
 import type { Candidate } from '@/domain/models';
 import { env } from '@/shared/config/env';
 import { track } from '@/shared/lib/analytics';
 import { haptics } from '@/shared/lib/platform';
-import { makeStyles, useTheme } from '@/shared/theme';
-import { Button, Card, Icon, PressableScale, ScreenScroll, Text, TextField } from '@/shared/ui';
+import { lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
+import {
+  Button,
+  Card,
+  Chip,
+  ChipRow,
+  EASE_IN_OUT,
+  Icon,
+  PressableScale,
+  ScreenScroll,
+  Text,
+  TextField,
+} from '@/shared/ui';
 import { useAppStore } from '@/store';
 import { extractPlaces, type ExtractionInput, type ExtractionResult } from '../api/extract';
 import { searchPlaces } from '../api/geocoding';
 import { detectPlatform, extractUrl, PLATFORM_LABEL } from '../links';
+
+const NEW_VAULT = 'new';
 
 const ENGINE_LABEL: Record<ExtractionResult['engine'], string> = {
   ai: 'AI extraction',
@@ -36,13 +52,18 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
   const [validation, setValidation] = useState<string>();
 
   const extraction = useMutation({
-    mutationFn: (input: ExtractionInput) => extractPlaces(input),
-    onSuccess: (res) =>
+    // Out of free AI imports: read the caption on the phone instead of blocking the save.
+    mutationFn: (input: ExtractionInput) =>
+      extractPlaces(input, undefined, { ai: currentEntitlements().canUseAi }),
+    onSuccess: (res) => {
+      if (res.engine === 'ai') useAppStore.getState().countAiImport();
+      if (res.aiLimited) track('ai_quota_reached', { used: currentEntitlements().aiImportsUsed });
       track('extraction_completed', {
         platform: res.platform,
         engine: res.engine,
         found: res.candidates.length,
-      }),
+      });
+    },
   });
 
   useEffect(() => {
@@ -162,16 +183,27 @@ export function CaptureScreen({ initialUrl, initialText }: { initialUrl?: string
 function FindingSpots() {
   const styles = useStyles();
   const { colors } = useTheme();
+  const reduced = useReducedMotion();
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setSlow(true), 8_000);
     return () => clearTimeout(timer);
   }, []);
+  // A slow breathing pulse says "working" without a spinner's urgency. Gone under Reduce Motion.
+  const pulse = reduced
+    ? undefined
+    : {
+        animationName: { from: { transform: [{ scale: 1 }] }, to: { transform: [{ scale: 1.07 }] } },
+        animationDuration: 900,
+        animationIterationCount: 'infinite' as const,
+        animationDirection: 'alternate' as const,
+        animationTimingFunction: EASE_IN_OUT,
+      };
   return (
     <View style={styles.center}>
-      <View style={styles.searchBadge}>
-        <Text style={styles.bigEmoji}>🔎</Text>
-      </View>
+      <Animated.View style={[styles.searchBadge, pulse]}>
+        <Icon name="search" size={42} color="primaryText" />
+      </Animated.View>
       <Text variant="heading">Finding the spots…</Text>
       <Text variant="caption" align="center">
         {slow
@@ -185,8 +217,13 @@ function FindingSpots() {
 
 function Review({ result, onRestart }: { result: ExtractionResult; onRestart: () => void }) {
   const styles = useStyles();
+  const { dark } = useTheme();
+  const insets = useSafeAreaInsets();
   const addPlaces = useAppStore((s) => s.addPlaces);
-  const { canSave } = useEntitlements();
+  const vaults = useAppStore((s) => s.vaults);
+  /** Where the saves also go: a vault's id, NEW_VAULT, or nowhere but the saves. */
+  const [target, setTarget] = useState<string>();
+  const [newVaultName, setNewVaultName] = useState('');
   const [candidates, setCandidates] = useState<Candidate[]>(result.candidates);
   const [selected, setSelected] = useState<Set<number>>(
     () =>
@@ -227,17 +264,13 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
   const chosen = candidates.filter((c, i) => selected.has(i) && c.lat !== undefined && c.lng !== undefined);
 
   const save = () => {
-    if (!canSave(chosen.length)) {
-      track('paywall_viewed', { trigger: 'save_limit' });
-      router.push('/paywall');
-      return;
-    }
     const platform = result.sourceUrl ? detectPlatform(result.sourceUrl) : 'manual';
-    addPlaces(
+    const ids = addPlaces(
       chosen.map((c) => ({
         name: c.name,
         city: c.city,
         country: c.country,
+        countryCode: c.countryCode,
         category: c.category,
         lat: c.lat!,
         lng: c.lng!,
@@ -247,6 +280,14 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
       })),
     );
     track('places_saved', { count: chosen.length, platform });
+    const store = useAppStore.getState();
+    if (target === NEW_VAULT && newVaultName.trim()) {
+      store.createVault({ name: newVaultName, placeIds: ids });
+      track('vault_created', { from: 'capture' });
+    } else if (target && target !== NEW_VAULT) {
+      store.addToVault(target, ids);
+      track('places_added_to_vault', { count: ids.length, from: 'capture' });
+    }
     haptics.success();
     router.back();
   };
@@ -264,6 +305,25 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           {ENGINE_LABEL[result.engine]}
         </Text>
 
+        {result.aiLimited ? (
+          <PressableScale
+            scale={0.98}
+            style={styles.limitBanner}
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/paywall', params: { reason: 'ai' } })}
+          >
+            <Icon name="sparkles" size={20} color="primaryText" />
+            <View style={styles.flex}>
+              <Text variant="bodyStrong">This month’s free AI imports are used up</Text>
+              <Text variant="caption">
+                We read the caption on your phone instead, so some spots may be missing. Pro and Trip Pass
+                read the cover and the video too.
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={18} color="primaryText" />
+          </PressableScale>
+        ) : null}
+
         {candidates.length === 0 ? (
           <Card style={styles.gap}>
             <Text>
@@ -277,60 +337,121 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           </Card>
         ) : null}
 
-        {candidates.map((c, i) => {
-          const on = selected.has(i);
-          const located = c.lat !== undefined;
-          const meta = CATEGORY_META[c.category];
-          return (
-            <PressableScale
-              key={`${c.name}-${i}`}
-              scale={0.98}
-              disabled={!located}
-              onPress={() => toggle(i)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: on && located, disabled: !located }}
-              style={[styles.candidate, on && located && styles.candidateOn]}
-            >
-              <Icon
-                name={located ? (on ? 'checkmark-circle' : 'ellipse-outline') : 'alert-circle-outline'}
-                size={26}
-                color={located ? (on ? 'primary' : 'textMuted') : 'warning'}
+        {candidates.length > 0 ? (
+          <View style={[styles.candidates, lift(dark)]}>
+            {candidates.map((c, i) => {
+              const on = selected.has(i);
+              const located = c.lat !== undefined;
+              const meta = CATEGORY_META[c.category];
+              return (
+                <Pressable
+                  key={`${c.name}-${i}`}
+                  disabled={!located}
+                  onPress={() => {
+                    haptics.selection();
+                    toggle(i);
+                  }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on && located, disabled: !located }}
+                  aria-checked={on && located}
+                  style={({ pressed }) => [
+                    styles.candidate,
+                    i > 0 && styles.divider,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Icon
+                    name={located ? (on ? 'checkmark-circle' : 'ellipse-outline') : 'alert-circle'}
+                    size={26}
+                    color={located ? (on ? 'primary' : 'textSubtle') : 'warning'}
+                  />
+                  <View style={styles.flex}>
+                    <Text variant="bodyStrong" color={located && !on ? 'textMuted' : 'text'}>
+                      {c.name}
+                    </Text>
+                    <Text variant="caption" numberOfLines={1} color={located ? 'textMuted' : 'warning'}>
+                      {located
+                        ? (c.address ?? [c.city, c.country].filter(Boolean).join(', '))
+                        : "Couldn't pin this one on the map"}
+                    </Text>
+                  </View>
+                  {located ? (
+                    <Pressable
+                      onPress={() => {
+                        haptics.selection();
+                        cycleCategory(i);
+                      }}
+                      hitSlop={6}
+                      accessibilityLabel={`Category ${meta.label}, tap to change`}
+                      style={({ pressed }) => [
+                        styles.pill,
+                        { backgroundColor: `${meta.color}${dark ? '2E' : '1C'}` },
+                        pressed && styles.pillPressed,
+                      ]}
+                    >
+                      <Icon name={meta.icon} size={13} color={meta.color} />
+                      <Text variant="caption" style={[styles.pillText, { color: meta.color }]}>
+                        {meta.label}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={() => fix.mutate(i)}
+                      disabled={fix.isPending}
+                      accessibilityLabel={`Search for ${c.name}`}
+                      style={({ pressed }) => [styles.pill, styles.searchPill, pressed && styles.pillPressed]}
+                    >
+                      <Icon name="search" size={13} color="primaryText" />
+                      <Text variant="caption" color="primaryText" style={styles.pillText}>
+                        {fix.isPending && fix.variables === i ? 'Searching…' : 'Search'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+        {candidates.length > 0 ? (
+          <View style={styles.saveTo}>
+            <Text variant="label" color="textMuted">
+              Also add to a vault
+            </Text>
+            <ChipRow inset={0}>
+              <Chip label="Just my saves" selected={!target} onPress={() => setTarget(undefined)} />
+              {vaults.map((v) => (
+                <Chip
+                  key={v.id}
+                  label={`${v.emoji ?? DEFAULT_VAULT_EMOJI} ${v.name}`}
+                  accessibilityLabel={`Add to ${v.name}`}
+                  selected={target === v.id}
+                  onPress={() => {
+                    haptics.selection();
+                    setTarget(target === v.id ? undefined : v.id);
+                  }}
+                />
+              ))}
+              <Chip
+                label="New vault"
+                icon="add"
+                selected={target === NEW_VAULT}
+                onPress={() => setTarget(target === NEW_VAULT ? undefined : NEW_VAULT)}
               />
-              <View style={styles.flex}>
-                <Text variant="bodyStrong">{c.name}</Text>
-                <Text variant="caption" numberOfLines={1}>
-                  {located
-                    ? (c.address ?? [c.city, c.country].filter(Boolean).join(', '))
-                    : "Couldn't pin this one on the map"}
-                </Text>
-              </View>
-              {located ? (
-                <Pressable
-                  onPress={() => cycleCategory(i)}
-                  accessibilityLabel={`Category ${meta.label}, tap to change`}
-                  style={[styles.pill, { backgroundColor: `${meta.color}22` }]}
-                >
-                  <Text variant="caption" style={[styles.pillText, { color: meta.color }]}>
-                    {meta.emoji} {meta.label}
-                  </Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={() => fix.mutate(i)}
-                  disabled={fix.isPending}
-                  accessibilityLabel={`Search for ${c.name}`}
-                  style={styles.pill}
-                >
-                  <Text variant="caption" color="accent" style={styles.pillText}>
-                    {fix.isPending && fix.variables === i ? 'Searching…' : 'Search'}
-                  </Text>
-                </Pressable>
-              )}
-            </PressableScale>
-          );
-        })}
+            </ChipRow>
+            {target === NEW_VAULT ? (
+              <TextField
+                value={newVaultName}
+                onChangeText={setNewVaultName}
+                placeholder="Name it: Goa weekend, cafés to try…"
+                accessibilityLabel="New vault name"
+                maxLength={60}
+                autoFocus
+              />
+            ) : null}
+          </View>
+        ) : null}
       </ScreenScroll>
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.footerInner}>
           <Button
             title={
@@ -338,10 +459,11 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
                 ? `Save ${chosen.length} spot${chosen.length === 1 ? '' : 's'}`
                 : 'Select spots to save'
             }
-            disabled={!chosen.length}
+            iconName={chosen.length ? 'bookmark' : undefined}
+            disabled={!chosen.length || (target === NEW_VAULT && !newVaultName.trim())}
             onPress={save}
           />
-          <Button title="Start over" variant="ghost" onPress={onRestart} />
+          <Button title="Start over" variant="ghost" size="md" onPress={onRestart} />
         </View>
       </View>
     </View>
@@ -351,6 +473,7 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
 const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
   gap: { gap: 12 },
+  saveTo: { gap: 10 },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -360,15 +483,14 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.background,
   },
   searchBadge: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
+    width: 96,
+    height: 96,
+    borderRadius: 32,
     backgroundColor: t.colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  bigEmoji: { fontSize: 48, lineHeight: 58 },
   spinner: { marginTop: 8 },
   linkPressed: { opacity: 0.6 },
   pasteBanner: {
@@ -376,32 +498,51 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     backgroundColor: t.colors.primarySoft,
+  },
+  limitBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: t.colors.primarySoft,
+  },
+  candidates: {
+    borderRadius: radius.lg,
+    backgroundColor: t.colors.surface,
+    borderWidth: t.dark ? 1 : 0,
+    borderColor: t.colors.border,
+    overflow: 'hidden',
   },
   candidate: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: t.colors.surface,
-    borderWidth: 1.5,
-    borderColor: t.colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 68,
   },
-  candidateOn: { borderColor: t.colors.primary, backgroundColor: t.colors.primarySoft },
+  divider: { borderTopWidth: 1, borderTopColor: t.colors.border },
+  pressed: { backgroundColor: t.colors.surfacePressed },
   pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: t.colors.accentSoft,
+    borderRadius: radius.pill,
   },
+  searchPill: { backgroundColor: t.colors.primarySoft },
+  pillPressed: { opacity: 0.7 },
   pillText: { fontWeight: '700', fontSize: 12 },
   footer: {
     borderTopWidth: 1,
     borderTopColor: t.colors.border,
     backgroundColor: t.colors.background,
-    padding: 16,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.md,
   },
   footerInner: { width: '100%', maxWidth: 720, alignSelf: 'center', gap: 4 },
 }));

@@ -9,11 +9,15 @@ import {
   type InitialViewState,
   type LngLatBounds,
 } from '@maplibre/maplibre-react-native';
-import { useImperativeHandle, useMemo, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useImperativeHandle, useMemo, useRef, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { LatLng } from '@/domain/models';
 import { env } from '@/shared/config/env';
+import { FONT_FAMILY } from '@/shared/theme';
 import type { MapProps } from './types';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const DEFAULT_PADDING = { top: 80, right: 40, bottom: 80, left: 40 };
 const EMPTY_LINE: GeoJSON.Feature = {
@@ -111,7 +115,11 @@ export function MapLibreNative({
           onPress={() => onMarkerPress?.(m.id)}
         >
           <View style={[styles.pin, { backgroundColor: m.color }, m.selected && styles.selected]}>
-            <Text style={styles.label}>{m.label}</Text>
+            {m.icon ? (
+              <Ionicons name={m.icon as IoniconName} size={17} color="#fff" />
+            ) : (
+              <Text style={styles.label}>{m.label}</Text>
+            )}
           </View>
         </Marker>
       ))}
@@ -142,15 +150,16 @@ function initialView(points: LatLng[], padding: MapProps['edgePadding']): Initia
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   pin: {
-    minWidth: 32,
-    height: 32,
+    minWidth: 34,
+    height: 34,
     paddingHorizontal: 4,
-    borderRadius: 16,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: '#fff',
+    boxShadow: '0px 1px 2px rgba(0,0,0,0.2), 0px 4px 12px rgba(0,0,0,0.22)',
   },
-  selected: { transform: [{ scale: 1.25 }] },
-  label: { fontSize: 15, color: '#fff', fontWeight: '800' },
+  selected: { transform: [{ scale: 1.22 }] },
+  label: { fontSize: 15, color: '#fff', fontFamily: FONT_FAMILY[800] },
 });

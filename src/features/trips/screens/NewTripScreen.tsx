@@ -1,16 +1,19 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CATEGORY_META } from '@/features/places/categories';
+import { vaultSummary } from '@/features/places/vaults';
 import { track } from '@/shared/lib/analytics';
 import { haptics } from '@/shared/lib/platform';
-import { CONTENT_MAX_WIDTH, makeStyles } from '@/shared/theme';
+import { CONTENT_MAX_WIDTH, lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
 import {
   Button,
   Chip,
   ChipRow,
   EmptyState,
   Icon,
+  IconBadge,
   PressableScale,
   ScreenScroll,
   Section,
@@ -22,9 +25,17 @@ import { suggestedDays } from '../planner';
 
 const MAX_DAYS = 14;
 
-export function NewTripScreen({ initialCity }: { initialCity?: string }) {
+/** `vaultId`: plan from one vault's spots only (custom or Liked) instead of everything saved. */
+export function NewTripScreen({ initialCity, vaultId }: { initialCity?: string; vaultId?: string }) {
   const styles = useStyles();
-  const places = useAppStore((s) => s.places);
+  const { dark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const allPlaces = useAppStore((s) => s.places);
+  const vaults = useAppStore((s) => s.vaults);
+  const places = useMemo(
+    () => (vaultId ? (vaultSummary(vaultId, vaults, allPlaces)?.places ?? allPlaces) : allPlaces),
+    [vaultId, vaults, allPlaces],
+  );
   const createTrip = useAppStore((s) => s.createTrip);
   const cities = useMemo(() => groupByCity(places), [places]);
 
@@ -37,7 +48,7 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
   const chosen = cityPlaces.filter((p) => !excluded.has(p.id));
 
   if (cities.length === 0 || !city) {
-    return <EmptyState emoji="🗺️" title="Save some spots first" body="Trips are built from your saves." />;
+    return <EmptyState icon="map" title="Save some spots first" body="Trips are built from your saves." />;
   }
 
   const toggle = (id: string) =>
@@ -57,19 +68,25 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
     });
     track('trip_created', { days: dayCount, stops: chosen.length });
     haptics.success();
-    router.dismiss();
-    router.push(`/trip/${id}`);
+    // Opened straight from a link, there's nothing underneath to dismiss to.
+    if (router.canDismiss()) {
+      router.dismiss();
+      router.push(`/trip/${id}`);
+    } else {
+      router.replace(`/trip/${id}`);
+    }
   };
 
   return (
     <View style={styles.flex}>
       <ScreenScroll>
         <Section title="Where">
-          <ChipRow inset={0}>
+          <ChipRow bleed>
             {cities.map((c) => (
               <Chip
                 key={c.city}
-                label={`${c.city} · ${c.places.length}`}
+                label={`${c.city}  ${c.places.length}`}
+                accessibilityLabel={`${c.city}, ${c.places.length} spots`}
                 selected={c.city === city}
                 onPress={() => {
                   setCity(c.city);
@@ -122,40 +139,58 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
 
         <TextField label="Trip name" value={name} onChangeText={setName} placeholder={`${city} getaway`} />
 
-        <Section title={`Include (${chosen.length}/${cityPlaces.length})`}>
-          {cityPlaces.map((p) => {
-            const on = !excluded.has(p.id);
-            return (
-              <PressableScale
-                key={p.id}
-                scale={0.98}
-                style={[styles.item, on && styles.itemOn]}
-                onPress={() => toggle(p.id)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: on }}
-              >
-                <Text style={styles.itemEmoji}>{CATEGORY_META[p.category].emoji}</Text>
-                <Text
-                  variant="bodyStrong"
-                  color={on ? 'text' : 'textMuted'}
-                  style={styles.flex}
-                  numberOfLines={1}
+        <Section title={`Include ${chosen.length} of ${cityPlaces.length}`}>
+          <View style={[styles.list, lift(dark)]}>
+            {cityPlaces.map((p, i) => {
+              const on = !excluded.has(p.id);
+              const meta = CATEGORY_META[p.category];
+              return (
+                <Pressable
+                  key={p.id}
+                  style={({ pressed }) => [
+                    styles.item,
+                    i > 0 && styles.itemDivider,
+                    pressed && styles.itemPressed,
+                  ]}
+                  onPress={() => {
+                    haptics.selection();
+                    toggle(p.id);
+                  }}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on }}
+                  aria-checked={on}
+                  accessibilityLabel={p.name}
                 >
-                  {p.name}
-                </Text>
-                <Icon
-                  name={on ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={on ? 'primary' : 'textMuted'}
-                />
-              </PressableScale>
-            );
-          })}
+                  <View style={!on && styles.dimmed}>
+                    <IconBadge icon={meta.icon} color={meta.color} size={36} />
+                  </View>
+                  <Text
+                    variant="bodyStrong"
+                    color={on ? 'text' : 'textMuted'}
+                    style={styles.flex}
+                    numberOfLines={1}
+                  >
+                    {p.name}
+                  </Text>
+                  <Icon
+                    name={on ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={24}
+                    color={on ? 'primary' : 'textSubtle'}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         </Section>
       </ScreenScroll>
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
         <View style={styles.footerInner}>
-          <Button title={`Build my ${dayCount}-day plan ✨`} disabled={chosen.length === 0} onPress={build} />
+          <Button
+            title={`Build my ${dayCount}-day plan`}
+            iconName="sparkles"
+            disabled={chosen.length === 0}
+            onPress={build}
+          />
         </View>
       </View>
     </View>
@@ -164,34 +199,46 @@ export function NewTripScreen({ initialCity }: { initialCity?: string }) {
 
 const useStyles = makeStyles((t) => ({
   flex: { flex: 1 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 6,
+    borderRadius: radius.pill,
+    backgroundColor: t.colors.surfaceSunken,
+  },
   stepButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: t.colors.surface,
-    borderWidth: 1,
-    borderColor: t.colors.border,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: t.colors.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepPressed: { backgroundColor: t.colors.surfacePressed },
   stepDisabled: { opacity: 0.4 },
-  days: { minWidth: 110, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  days: { textAlign: 'center', fontVariant: ['tabular-nums'] },
+  list: {
+    borderRadius: radius.lg,
+    backgroundColor: t.colors.surface,
+    borderWidth: t.dark ? 1 : 0,
+    borderColor: t.colors.border,
+    overflow: 'hidden',
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: t.colors.surface,
-    borderWidth: 1.5,
-    borderColor: t.colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    minHeight: 60,
   },
-  itemOn: { borderColor: t.colors.primary, backgroundColor: t.colors.primarySoft },
-  itemEmoji: { fontSize: 20, lineHeight: 26 },
+  itemDivider: { borderTopWidth: 1, borderTopColor: t.colors.border },
+  itemPressed: { backgroundColor: t.colors.surfacePressed },
+  dimmed: { opacity: 0.45 },
   footer: {
-    padding: 16,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: t.colors.border,
     backgroundColor: t.colors.background,

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Map as MapLibreMap, Marker, type GeoJSONSource, type MapOptions } from 'maplibre-gl';
 import { useEffect, useImperativeHandle, useRef } from 'react';
@@ -209,25 +210,31 @@ function createPin(id: string, onSelect: (id: string) => void) {
   return { marker: new Marker({ element: wrapper }), pin };
 }
 
+/** The Ionicons glyph for a name, drawn with the icon font the app already loads. */
+function glyph(name: string): string {
+  const code = (Ionicons.glyphMap as Record<string, number | string>)[name];
+  return typeof code === 'number' ? String.fromCodePoint(code) : (code ?? '');
+}
+
 function paintPin(pin: HTMLDivElement, m: MapMarker) {
-  pin.textContent = m.label;
-  pin.parentElement?.setAttribute('aria-label', m.accessibilityLabel ?? m.label);
+  pin.textContent = m.icon ? glyph(m.icon) : (m.label ?? '');
+  pin.parentElement?.setAttribute('aria-label', m.accessibilityLabel ?? m.label ?? '');
   pin.style.cssText = [
-    'min-width:32px',
-    'height:32px',
+    'min-width:34px',
+    'height:34px',
     'padding:0 4px',
     'box-sizing:border-box',
-    'border-radius:16px',
+    'border-radius:17px',
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    'border:2px solid #fff',
-    'box-shadow:0 2px 6px rgba(0,0,0,.25)',
+    'border:2.5px solid #fff',
+    'box-shadow:0 1px 2px rgba(0,0,0,.2),0 4px 12px rgba(0,0,0,.22)',
     'color:#fff',
-    'font:800 15px system-ui,-apple-system,sans-serif',
+    m.icon ? 'font:16px ionicons' : "font:800 15px 'PlusJakartaSans_800ExtraBold',system-ui,sans-serif",
     `background:${m.color}`,
-    `transform:scale(${m.selected ? 1.25 : 1})`,
-    'transition:transform .15s ease',
+    `transform:scale(${m.selected ? 1.22 : 1})`,
+    'transition:transform .18s cubic-bezier(.23,1,.32,1)',
   ].join(';');
   if (m.selected) pin.parentElement?.style.setProperty('z-index', '2');
   else pin.parentElement?.style.removeProperty('z-index');
