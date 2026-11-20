@@ -16,6 +16,14 @@ const EnvSchema = z.object({
   /** Supabase project for accounts. Optional: without it the app has no sign-in. The anon key is public. */
   supabaseUrl: z.url().optional(),
   supabaseAnonKey: z.string().min(20).optional(),
+  /** Where the web app is hosted, for trip links shared from a phone. On web the page's own origin is used. */
+  webUrl: z.url().optional(),
+  /** Partner IDs for booking links. Optional: links work without them, without commission. */
+  gygPartnerId: z.string().min(1).optional(),
+  bookingAid: z.string().min(1).optional(),
+  /** PostHog project key (public by design). Optional: without it analytics only logs in development. */
+  posthogKey: z.string().min(1).optional(),
+  posthogHost: z.url().default('https://us.i.posthog.com'),
   appVariant: z.enum(['development', 'preview', 'production']).default('development'),
 });
 
@@ -27,6 +35,11 @@ function readEnv(): Env {
     mapStyleUrl: process.env.EXPO_PUBLIC_MAP_STYLE_URL || undefined,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, '') || undefined,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || undefined,
+    webUrl: process.env.EXPO_PUBLIC_WEB_URL?.replace(/\/$/, '') || undefined,
+    gygPartnerId: process.env.EXPO_PUBLIC_GYG_PARTNER_ID || undefined,
+    bookingAid: process.env.EXPO_PUBLIC_BOOKING_AID || undefined,
+    posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || undefined,
+    posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST?.replace(/\/$/, '') || undefined,
     appVariant: Constants.expoConfig?.extra?.appVariant,
   });
   if (!parsed.success) {
