@@ -53,4 +53,5 @@ Read `docs/ARCHITECTURE.md` before structural changes. In short:
 - `app.config.ts` is dynamic: `expo install` cannot add plugins to it, so add config plugins by hand. Keep `scheme` a single string (expo-sharing depends on it).
 - The project uses development builds (`expo-dev-client`); `npm run start:go` serves Expo Go, where the share extension is unavailable.
 - "Share to Travyy" lands on `src/app/expo-sharing.tsx` (path fixed by expo-sharing) and forwards to `/add`. Never call expo-sharing outside `src/features/capture/share/readIncomingShare.ts`.
+- Git: `develop` is the default branch and the target of every pull request; `main` only receives `develop` at release time. Never commit to either directly. Cut branches from an up-to-date `develop` and name them `feature/…`, `fix/…`, `chore/…` or `docs/…` (lower case, hyphens). Delete branches once merged.
 - Before declaring work done: `npm run check`, and `npx expo export --platform web --platform android --platform ios` when touching platform code.

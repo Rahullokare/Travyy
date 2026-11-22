@@ -139,6 +139,32 @@ npx eas-cli@latest build --profile preview --platform android
 
 When the build finishes, EAS shows a download link and QR code for the `.apk`. Open it on your phone and install it (allow "install unknown apps" for your browser). The app installs as **Travyy (Preview)**.
 
+## Branches and pull requests
+
+| Branch | What it is | Builds from it |
+|---|---|---|
+| `develop` | Default branch. All work is merged here through pull requests | EAS `preview` (test APKs) |
+| `main` | What's released. Only updated by merging `develop` into it when shipping | EAS `production` (stores) |
+
+Everything else is a short-lived branch cut from `develop`, opened as a PR into `develop`, and deleted once merged. Name it `type/short-description`, lower case with hyphens:
+
+| Type | For | Example |
+|---|---|---|
+| `feature/` | New features and improvements | `feature/apple-sign-in` |
+| `fix/` | Bug fixes | `fix/vault-delete-navigation` |
+| `chore/` | Dependencies, tooling, CI, config | `chore/update-expo-packages` |
+| `docs/` | Documentation only | `docs/backend-setup` |
+
+```bash
+git switch develop && git pull
+```
+
+```bash
+git switch -c feature/short-description
+```
+
+To release, open a PR from `develop` into `main`, merge it, then build with `--profile production` from `main`. A fix needed in a release goes into `develop` first, then into `main` the same way. CI runs on every pull request and on pushes to `develop` and `main`.
+
 ## Building and releasing
 
 EAS profiles are in `eas.json`:
