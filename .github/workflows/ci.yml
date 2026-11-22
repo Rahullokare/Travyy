@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Feature branches are checked through their pull request; pushes are checked on the long-lived branches.
   push:
+    branches: [develop, main]
   pull_request:
 
 concurrency:
