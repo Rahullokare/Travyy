@@ -20,8 +20,10 @@ import { fold } from './vault';
  */
 
 const API = 'https://en.wikipedia.org/w/api.php';
-// Wikimedia asks apps to identify themselves; browsers can't set User-Agent (and origin=* covers CORS).
-const HEADERS: Record<string, string> =
+// Wikimedia asks apps to identify themselves, and its image servers answer 403 to Android's default
+// "okhttp" agent, so the images need it too (PlacePhotoView). Browsers can't set User-Agent, and
+// send a real one anyway; origin=* covers CORS.
+export const WIKIMEDIA_HEADERS: Record<string, string> =
   Platform.OS === 'web' ? {} : { 'User-Agent': 'Travyy/1.0 (travel saves app)' };
 /** Retry "nothing found" after this long: articles and photos get added. */
 const RECHECK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -89,7 +91,7 @@ async function lookUp(place: Pick<Place, 'name' | 'lat' | 'lng'>): Promise<Omit<
     piprop: 'thumbnail|name',
     pithumbsize: '640',
   });
-  const res = await fetchWithTimeout(`${API}?${params}`, { headers: HEADERS, timeoutMs: 10_000 });
+  const res = await fetchWithTimeout(`${API}?${params}`, { headers: WIKIMEDIA_HEADERS, timeoutMs: 10_000 });
   if (!res.ok) throw new Error(`Wikipedia HTTP ${res.status}`);
   const parsed = ResponseSchema.safeParse(await res.json());
   const pages = parsed.success ? Object.values(parsed.data.query?.pages ?? {}) : [];
@@ -142,9 +144,4 @@ export function usePlacePhoto(place: Pick<Place, 'name' | 'lat' | 'lng'>): Place
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, checkedAt, found]);
   return photo?.url ? photo : undefined;
-}
-
-/** A photo that failed to load (moved, deleted on Commons) is forgotten, so the card falls back. */
-export function forgetPhoto(place: Pick<Place, 'name' | 'lat' | 'lng'>) {
-  usePhotoStore.getState().savePhoto(photoKey(place), {});
 }
