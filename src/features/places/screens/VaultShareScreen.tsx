@@ -2,6 +2,7 @@ import { router, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useSession } from '@/features/auth/session';
+import { webBase } from '@/features/trips/shareLink';
 import { track } from '@/shared/lib/analytics';
 import { confirm, haptics, notify, shareText } from '@/shared/lib/platform';
 import { makeStyles, radius, spacing } from '@/shared/theme';
@@ -93,12 +94,18 @@ export function VaultShareScreen({ id }: { id: string }) {
           <View style={styles.flex}>
             <Text variant="heading">Send a copy</Text>
             <Text variant="caption">
-              Friends see the {vault.places.length} spots on a map, even without the app, and can add them to
-              their own Travyy. Later changes don’t reach them.
+              {webBase()
+                ? `Friends see the ${vault.places.length} spots on a map, even without the app, and can add them to their own Travyy. Later changes don’t reach them.`
+                : `Sends the ${vault.places.length} spots as a list friends can read anywhere. Later changes don’t reach them.`}
             </Text>
           </View>
         </View>
-        <Button title="Share link" iconName="share-outline" variant="secondary" onPress={sendCopy} />
+        <Button
+          title={webBase() ? 'Share link' : 'Share list'}
+          iconName="share-outline"
+          variant="secondary"
+          onPress={sendCopy}
+        />
       </Card>
 
       {vault.custom && sharingAvailable ? (

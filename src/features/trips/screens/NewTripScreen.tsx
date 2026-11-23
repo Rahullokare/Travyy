@@ -20,7 +20,7 @@ import {
   Text,
   TextField,
 } from '@/shared/ui';
-import { groupByCity, useAppStore } from '@/store';
+import { knownCities, useAppStore } from '@/store';
 import { suggestedDays } from '../planner';
 
 const MAX_DAYS = 14;
@@ -37,7 +37,8 @@ export function NewTripScreen({ initialCity, vaultId }: { initialCity?: string; 
     [vaultId, vaults, allPlaces],
   );
   const createTrip = useAppStore((s) => s.createTrip);
-  const cities = useMemo(() => groupByCity(places), [places]);
+  // A walking plan needs one city: spots without one are left out.
+  const cities = useMemo(() => knownCities(places), [places]);
 
   const [city, setCity] = useState(initialCity ?? cities[0]?.city);
   const cityPlaces = useMemo(() => cities.find((c) => c.city === city)?.places ?? [], [cities, city]);
@@ -79,7 +80,20 @@ export function NewTripScreen({ initialCity, vaultId }: { initialCity?: string; 
 
   return (
     <View style={styles.flex}>
-      <ScreenScroll>
+      <ScreenScroll
+        footer={
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={styles.footerInner}>
+              <Button
+                title={`Build my ${dayCount}-day plan`}
+                iconName="sparkles"
+                disabled={chosen.length === 0}
+                onPress={build}
+              />
+            </View>
+          </View>
+        }
+      >
         <Section title="Where">
           <ChipRow bleed>
             {cities.map((c) => (
@@ -183,16 +197,6 @@ export function NewTripScreen({ initialCity, vaultId }: { initialCity?: string; 
           </View>
         </Section>
       </ScreenScroll>
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <View style={styles.footerInner}>
-          <Button
-            title={`Build my ${dayCount}-day plan`}
-            iconName="sparkles"
-            disabled={chosen.length === 0}
-            onPress={build}
-          />
-        </View>
-      </View>
     </View>
   );
 }

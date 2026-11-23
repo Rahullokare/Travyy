@@ -121,14 +121,14 @@ export function PlaceDetailScreen({ id }: { id: string }) {
         <Button
           title="Directions"
           iconName="navigate"
-          style={styles.flex}
+          style={styles.action}
           onPress={() => openInMaps(place)}
         />
         <Button
           title={place.visitedAt ? 'Visited' : 'Mark visited'}
           variant={place.visitedAt ? 'secondary' : 'tinted'}
           iconName={place.visitedAt ? 'checkmark-circle' : 'checkmark-circle-outline'}
-          style={styles.flex}
+          style={styles.action}
           onPress={() => {
             if (!place.visitedAt) {
               track('place_visited', { category: place.category });
@@ -221,6 +221,8 @@ const useStyles = makeStyles((t) => ({
   headerActions: { flexDirection: 'row', gap: spacing.sm },
   badges: { flexDirection: 'row', gap: 6, marginBottom: 2 },
   actions: { flexDirection: 'row', gap: 10 },
+  // Two buttons share a phone's width: less side padding keeps "Mark visited" from being cut off.
+  action: { flex: 1, paddingHorizontal: 12 },
   flex: { flex: 1 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   source: {

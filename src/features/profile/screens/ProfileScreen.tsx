@@ -8,7 +8,7 @@ import { syncNow, useSyncStatus, type SyncStatus } from '@/features/sync/useAcco
 import { confirm } from '@/shared/lib/platform';
 import { lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
 import { Button, Card, Icon, IconBadge, ScreenHeader, ScreenScroll, Text, type IconName } from '@/shared/ui';
-import { groupByCity, useAppStore, visitRate } from '@/store';
+import { knownCities, useAppStore, visitRate } from '@/store';
 
 const PERSONALITY: Record<Category, string> = {
   food: 'The Food Pilgrim',
@@ -62,7 +62,7 @@ export function ProfileScreen() {
 
         <View style={styles.grid}>
           <Stat n={places.length} label="Saved" icon="bookmark" color={colors.primary} />
-          <Stat n={groupByCity(places).length} label="Cities" icon="business" color="#2F6FE0" />
+          <Stat n={knownCities(places).length} label="Cities" icon="business" color="#2F6FE0" />
           <Stat n={countries} label="Countries" icon="flag" color="#22945F" />
           <Stat n={trips.length} label="Trips" icon="airplane" color="#7B5BE0" />
         </View>

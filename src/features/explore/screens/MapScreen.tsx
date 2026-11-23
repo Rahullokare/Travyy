@@ -25,7 +25,7 @@ import {
   Text,
   useEntrance,
 } from '@/shared/ui';
-import { cityOf, groupByCity, useAppStore } from '@/store';
+import { cityOf, knownCities, useAppStore } from '@/store';
 
 const NEARBY_RADIUS_M = 1500;
 const SIDE_PANEL_WIDTH = 400;
@@ -42,7 +42,7 @@ export function MapScreen() {
   const [selectedId, setSelectedId] = useState<string>();
   const { location, request } = useUserLocation();
 
-  const cities = useMemo(() => groupByCity(places), [places]);
+  const cities = useMemo(() => knownCities(places), [places]);
   const visible = useMemo(() => (city ? places.filter((p) => cityOf(p) === city) : places), [places, city]);
   const selected = visible.find((p) => p.id === selectedId);
   const markers = useMemo(

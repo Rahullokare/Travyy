@@ -16,7 +16,7 @@ import {
   ScreenHeader,
   Text,
 } from '@/shared/ui';
-import { cityOf, useAppStore } from '@/store';
+import { areaOf, knownCities, useAppStore } from '@/store';
 import { CATEGORY_META } from '../categories';
 import { PlaceRow } from '../components/PlaceRow';
 import { SearchField } from '../components/SearchField';
@@ -81,7 +81,7 @@ export function SavesScreen() {
     }));
   }, [searching, places, category, query]);
 
-  const cityCount = countries.reduce((n, c) => n + c.cities.length, 0);
+  const cityCount = knownCities(places).length;
   const known = countries.filter((c) => c.country !== UNKNOWN_COUNTRY).length;
 
   return (
@@ -140,7 +140,7 @@ export function SavesScreen() {
           {searching ? (
             <SpotList
               sections={results}
-              subtitleFor={(p) => `${CATEGORY_META[p.category].label} · ${cityOf(p)}`}
+              subtitleFor={(p) => `${CATEGORY_META[p.category].label} · ${areaOf(p)}`}
               emptyBody="Nothing in your saves matches. Check the spelling, or clear the filter."
             />
           ) : (
@@ -214,8 +214,16 @@ export function SavesScreen() {
                   key={g.country}
                   title={g.country}
                   flag={flagOf(g.code)}
-                  meta={`${plural(g.spots, 'spot')} · ${plural(g.cities.length, 'city', 'cities')}`}
-                  detail={g.cities.map((c) => c.city).join(', ')}
+                  meta={[
+                    plural(g.spots, 'spot'),
+                    ...(g.cities.some((c) => c.known)
+                      ? [plural(g.cities.filter((c) => c.known).length, 'city', 'cities')]
+                      : []),
+                  ].join(' · ')}
+                  detail={g.cities
+                    .filter((c) => c.known)
+                    .map((c) => c.city)
+                    .join(', ')}
                   visited={g.visited}
                   total={g.spots}
                   onPress={() => openCountry(g)}
@@ -230,7 +238,7 @@ export function SavesScreen() {
                     {i > 0 ? <View style={styles.separator} /> : null}
                     <PlaceRow
                       place={p}
-                      subtitle={`${CATEGORY_META[p.category].label} · ${cityOf(p)}`}
+                      subtitle={`${CATEGORY_META[p.category].label} · ${areaOf(p)}`}
                       onPress={() => router.push(`/place/${p.id}`)}
                     />
                   </View>

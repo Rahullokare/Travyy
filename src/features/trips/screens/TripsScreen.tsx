@@ -17,7 +17,7 @@ import {
   ScreenHeader,
   Text,
 } from '@/shared/ui';
-import { groupByCity, useAppStore, useLedgerStore } from '@/store';
+import { knownCities, useAppStore, useLedgerStore } from '@/store';
 import { suggestedDays } from '../planner';
 
 export function TripsScreen() {
@@ -27,7 +27,7 @@ export function TripsScreen() {
   const places = useAppStore((s) => s.places);
   const ledgers = useLedgerStore((s) => s.ledgers);
   const { canCreateTrip } = useEntitlements();
-  const ready = groupByCity(places).filter((c) => c.places.length >= 3);
+  const ready = knownCities(places).filter((c) => c.places.length >= 3);
 
   const startTrip = (city?: string) => {
     if (!canCreateTrip) {

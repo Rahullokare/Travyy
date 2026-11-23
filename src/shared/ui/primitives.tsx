@@ -525,13 +525,20 @@ export function ScreenHeader({
  * On Android, Expo apps are edge-to-edge, so the window no longer shrinks for the keyboard and
  * fields near the bottom end up under it. Padding the screen by the keyboard's height shrinks the
  * ScrollView, which then scrolls the focused field into view. iOS screens opt in per screen with
- * `automaticallyAdjustKeyboardInsets`.
+ * `automaticallyAdjustKeyboardInsets`. A bottom bar with the screen's main button goes in `footer`,
+ * so the keyboard can't cover it.
  */
 export function ScreenScroll({
   children,
   contentStyle,
+  footer,
   ...rest
-}: ScrollViewProps & { children: ReactNode; contentStyle?: StyleProp<ViewStyle> }) {
+}: ScrollViewProps & {
+  children: ReactNode;
+  contentStyle?: StyleProp<ViewStyle>;
+  /** Pinned below the scrolling content, and lifted above the keyboard with it on Android. */
+  footer?: ReactNode;
+}) {
   const styles = useStyles();
   // The screen sits below the header, but the keyboard is measured from the top of the window.
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
@@ -544,6 +551,7 @@ export function ScreenScroll({
       <ScrollView style={styles.screen} keyboardShouldPersistTaps="handled" {...rest}>
         <View style={[styles.content, contentStyle]}>{children}</View>
       </ScrollView>
+      {footer}
     </KeyboardAvoidingView>
   );
 }

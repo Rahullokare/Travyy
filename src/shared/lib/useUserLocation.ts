@@ -23,10 +23,16 @@ export function useUserLocation() {
         if (ask) setStatus('denied');
         return undefined;
       }
+      // With the phone's location switched off, asking for a position makes Android show its
+      // "turn on location" dialog. Only do that when the user tapped to locate themselves.
+      if (!ask && !(await Location.hasServicesEnabledAsync().catch(() => false))) return undefined;
       setStatus('loading');
       const last = await Location.getLastKnownPositionAsync().catch(() => null);
       if (last) setLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        mayShowUserSettingsDialog: ask,
+      });
       const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setLocation(next);
       setStatus('ready');

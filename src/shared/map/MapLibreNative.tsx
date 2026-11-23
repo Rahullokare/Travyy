@@ -20,11 +20,8 @@ import type { MapProps } from './types';
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const DEFAULT_PADDING = { top: 80, right: 40, bottom: 80, left: 40 };
-const EMPTY_LINE: GeoJSON.Feature = {
-  type: 'Feature',
-  properties: {},
-  geometry: { type: 'LineString', coordinates: [] },
-};
+/** No route: an empty collection, since MapLibre rejects a line with fewer than two points. */
+const NO_ROUTE: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 /**
  * iOS/Android map on MapLibre Native with free OpenFreeMap vector tiles: no Google key,
@@ -70,7 +67,7 @@ export function MapLibreNative({
     [edgePadding],
   );
 
-  const routeShape = useMemo<GeoJSON.Feature>(
+  const routeShape = useMemo<GeoJSON.Feature | GeoJSON.FeatureCollection>(
     () =>
       route && route.coordinates.length > 1
         ? {
@@ -78,7 +75,7 @@ export function MapLibreNative({
             properties: {},
             geometry: { type: 'LineString', coordinates: route.coordinates.map((p) => [p.lng, p.lat]) },
           }
-        : EMPTY_LINE,
+        : NO_ROUTE,
     [route],
   );
 
