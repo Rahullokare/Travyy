@@ -14,11 +14,12 @@ export type AnalyticsEvent =
   | { name: 'share_received'; props: { platform: SourcePlatform } }
   | { name: 'extraction_completed'; props: { platform: SourcePlatform; engine: string; found: number } }
   | { name: 'places_saved'; props: { count: number; platform: SourcePlatform } }
+  | { name: 'pin_dropped'; props: { how: 'long_press' | 'pick' } }
   | { name: 'trip_created'; props: { days: number; stops: number } }
   | { name: 'place_visited'; props: { category: string } }
   | { name: 'place_liked'; props: { category: string } }
   | { name: 'vault_created'; props: { from: 'saves' | 'place' | 'capture' } }
-  | { name: 'places_added_to_vault'; props: { count: number; from: 'capture' | 'vault' } }
+  | { name: 'places_added_to_vault'; props: { count: number; from: 'capture' | 'vault' | 'map' } }
   | { name: 'vault_shared'; props: { spots: number; link: boolean } }
   | { name: 'shared_vault_opened'; props: { spots: number; valid: boolean } }
   | { name: 'shared_vault_imported'; props: { spots: number; newUser: boolean } }

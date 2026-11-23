@@ -7,7 +7,7 @@ import { FREE_LIMITS, useEntitlements } from '@/features/paywall/entitlements';
 import { syncNow, useSyncStatus, type SyncStatus } from '@/features/sync/useAccountSync';
 import { confirm } from '@/shared/lib/platform';
 import { lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
-import { Button, Card, Icon, IconBadge, ScreenHeader, ScreenScroll, Text, type IconName } from '@/shared/ui';
+import { Button, Card, Icon, IconBadge, ScreenScroll, Text, type IconName } from '@/shared/ui';
 import { knownCities, useAppStore, visitRate } from '@/store';
 
 const PERSONALITY: Record<Category, string> = {
@@ -40,7 +40,6 @@ export function ProfileScreen() {
 
   return (
     <View style={styles.flex}>
-      <ScreenHeader title="You" />
       <ScreenScroll contentStyle={styles.content}>
         <View style={[styles.hero, lift(dark)]}>
           <Text variant="overline" style={styles.heroMuted}>

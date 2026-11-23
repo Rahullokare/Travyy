@@ -20,3 +20,4 @@ export {
   visitRate,
   type CityGroup,
 } from './selectors';
+export { usePhotoStore, type PlacePhoto } from './photoStore';

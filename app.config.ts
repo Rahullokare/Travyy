@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: v.id,
     adaptiveIcon: {
-      backgroundColor: '#FFE9E2',
+      backgroundColor: '#D14318',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -83,9 +83,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       {
         image: './assets/splash-icon.png',
-        imageWidth: 160,
-        backgroundColor: '#FAF7F2',
-        dark: { image: './assets/splash-icon.png', backgroundColor: '#16130F' },
+        imageWidth: 120,
+        // The app's own page colours (theme tokens), so the animated splash takes over seamlessly.
+        backgroundColor: '#F6F5F2',
+        dark: { image: './assets/splash-icon.png', backgroundColor: '#0F0E0D' },
       },
     ],
   ],

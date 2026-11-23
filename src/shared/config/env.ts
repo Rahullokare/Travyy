@@ -13,6 +13,8 @@ const EnvSchema = z.object({
   apiUrl: z.url().optional(),
   /** MapLibre style for the web map. OpenFreeMap is free and needs no key. */
   mapStyleUrl: z.url().default('https://tiles.openfreemap.org/styles/liberty'),
+  /** The same map at night, so a dark app doesn't open onto a bright white map. */
+  mapStyleUrlDark: z.url().default('https://tiles.openfreemap.org/styles/dark'),
   /** Supabase project for accounts. Optional: without it the app has no sign-in. The anon key is public. */
   supabaseUrl: z.url().optional(),
   supabaseAnonKey: z.string().min(20).optional(),
@@ -33,6 +35,7 @@ function readEnv(): Env {
   const parsed = EnvSchema.safeParse({
     apiUrl: process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') || undefined,
     mapStyleUrl: process.env.EXPO_PUBLIC_MAP_STYLE_URL || undefined,
+    mapStyleUrlDark: process.env.EXPO_PUBLIC_MAP_STYLE_URL_DARK || undefined,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, '') || undefined,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || undefined,
     webUrl: process.env.EXPO_PUBLIC_WEB_URL?.replace(/\/$/, '') || undefined,

@@ -19,6 +19,8 @@ const HitSchema = z.object({
   lat: z.coerce.number(),
   lon: z.coerce.number(),
   display_name: z.string(),
+  /** The feature's own name, when the point is on something named (a café, a park). */
+  name: z.string().optional(),
   type: z.string().optional(),
   category: z.string().optional(),
   addresstype: z.string().optional(),
@@ -172,6 +174,9 @@ export async function reverseGeocode(point: LatLng, signal?: AbortSignal) {
       await politeGet(`/reverse?format=jsonv2&addressdetails=1&lat=${point.lat}&lon=${point.lng}`, signal),
     );
     return {
+      /** What's at the point, if it has a name of its own: a good first guess for a dropped pin. */
+      name: hit.name?.trim() || undefined,
+      category: categoryFromOsm(hit),
       city: cityOf(hit.address),
       country: hit.address?.country,
       countryCode: normalizeCountryCode(hit.address?.country_code),

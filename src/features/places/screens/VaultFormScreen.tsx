@@ -59,9 +59,9 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
         destructive: true,
       })
     ) {
-      // The vault screen underneath is gone too: back to the Saves tab.
+      // The vault screen underneath is gone too: back to the Vaults tab.
       if (router.canDismiss()) router.dismissAll();
-      router.navigate('/saves');
+      router.navigate('/vaults');
       removeVault(existing.id);
     }
   };
@@ -83,7 +83,7 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
     try {
       await leaveVault(existing.id);
       if (router.canDismiss()) router.dismissAll();
-      router.navigate('/saves');
+      router.navigate('/vaults');
     } catch (error) {
       setLeaving(false);
       notify(

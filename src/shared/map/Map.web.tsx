@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import type { LatLng } from '@/domain/models';
 import { env } from '@/shared/config/env';
 import { logger } from '@/shared/lib/logger';
+import { useTheme } from '@/shared/theme';
 import type { MapMarker, MapProps } from './types';
 
 const DEFAULT_PADDING = { top: 80, right: 40, bottom: 80, left: 40 };
@@ -24,17 +25,20 @@ export function Map({
   interactive = true,
   onMarkerPress,
   onPress,
+  onLongPress,
   style,
   edgePadding = DEFAULT_PADDING,
 }: MapProps) {
+  const { dark } = useTheme();
+  const styleUrl = dark ? env.mapStyleUrlDark : env.mapStyleUrl;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const pinsRef = useRef(new globalThis.Map<string, { marker: Marker; pin: HTMLDivElement }>());
   const userDotRef = useRef<Marker | null>(null);
   // Latest callbacks without re-binding DOM listeners on every render.
-  const handlersRef = useRef({ onMarkerPress, onPress });
+  const handlersRef = useRef({ onMarkerPress, onPress, onLongPress });
   useEffect(() => {
-    handlersRef.current = { onMarkerPress, onPress };
+    handlersRef.current = { onMarkerPress, onPress, onLongPress };
   });
 
   // Create the map once; props below are synced incrementally.
@@ -43,12 +47,14 @@ export function Map({
     const pins = pinsRef.current;
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: env.mapStyleUrl,
+      style: styleUrl,
       interactive,
       attributionControl: { compact: true },
       ...initialCamera(initialPoints ?? markers.map((m) => m.coordinate), edgePadding),
     });
     map.on('click', () => handlersRef.current.onPress?.());
+    // Right-click on desktop, press-and-hold on touch screens (MapLibre reports both as contextmenu).
+    map.on('contextmenu', (e) => handlersRef.current.onLongPress?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }));
     // Tile/style failures (offline, blocked host) must not surface as app errors:
     // pins and routes still render, only the basemap is missing.
     map.on('error', (e) => logger.warn('Map error', { message: e.error?.message }));
@@ -62,6 +68,18 @@ export function Map({
     // Mount-only by design: camera/interactivity are initial values, like native initialRegion.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Follow the app's light/dark theme. Markers are DOM elements, so they survive a style swap.
+  // The route is a layer, so it's drawn again once the new style has loaded.
+  const firstStyle = useRef(styleUrl);
+  const drawRouteRef = useRef<() => void>(undefined);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || styleUrl === firstStyle.current) return;
+    firstStyle.current = styleUrl;
+    map.setStyle(styleUrl);
+    map.once('style.load', () => drawRouteRef.current?.());
+  }, [styleUrl]);
 
   // Sync markers: add new, update changed, remove gone.
   useEffect(() => {
@@ -115,6 +133,7 @@ export function Map({
       }
       map.setPaintProperty(ROUTE_ID, 'line-color', route?.color ?? '#000');
     };
+    drawRouteRef.current = apply;
     if (map.isStyleLoaded()) apply();
     else map.once('load', apply);
   }, [route]);
@@ -153,8 +172,12 @@ export function Map({
         }
         map.fitBounds(bounds(points), { padding: edgePadding, maxZoom: 15, duration: 600 });
       },
-      centerOn(point) {
-        mapRef.current?.flyTo({ center: [point.lng, point.lat], zoom: 14, duration: 600 });
+      centerOn(point, zoom = 14) {
+        mapRef.current?.flyTo({ center: [point.lng, point.lat], zoom, duration: 600 });
+      },
+      async getCenter() {
+        const c = mapRef.current?.getCenter();
+        return c ? { lat: c.lat, lng: c.lng } : undefined;
       },
     }),
     [edgePadding],
