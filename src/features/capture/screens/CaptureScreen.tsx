@@ -294,7 +294,25 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
 
   return (
     <View style={styles.flex}>
-      <ScreenScroll>
+      <ScreenScroll
+        footer={
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={styles.footerInner}>
+              <Button
+                title={
+                  chosen.length
+                    ? `Save ${chosen.length} spot${chosen.length === 1 ? '' : 's'}`
+                    : 'Select spots to save'
+                }
+                iconName={chosen.length ? 'bookmark' : undefined}
+                disabled={!chosen.length || (target === NEW_VAULT && !newVaultName.trim())}
+                onPress={save}
+              />
+              <Button title="Start over" variant="ghost" size="md" onPress={onRestart} />
+            </View>
+          </View>
+        }
+      >
         <Text variant="title">
           {candidates.length === 0
             ? 'No places found'
@@ -451,21 +469,6 @@ function Review({ result, onRestart }: { result: ExtractionResult; onRestart: ()
           </View>
         ) : null}
       </ScreenScroll>
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <View style={styles.footerInner}>
-          <Button
-            title={
-              chosen.length
-                ? `Save ${chosen.length} spot${chosen.length === 1 ? '' : 's'}`
-                : 'Select spots to save'
-            }
-            iconName={chosen.length ? 'bookmark' : undefined}
-            disabled={!chosen.length || (target === NEW_VAULT && !newVaultName.trim())}
-            onPress={save}
-          />
-          <Button title="Start over" variant="ghost" size="md" onPress={onRestart} />
-        </View>
-      </View>
     </View>
   );
 }

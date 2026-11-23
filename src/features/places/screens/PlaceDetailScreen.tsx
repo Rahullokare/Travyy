@@ -1,12 +1,13 @@
 import * as WebBrowser from 'expo-web-browser';
 import { router, Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import type { Place } from '@/domain/models';
 import { BookingOffers, PARTNER_IDS } from '@/features/booking/components/BookingOffers';
 import { placeOffers } from '@/features/booking/offers';
 import { PLATFORM_LABEL } from '@/features/capture/links';
 import { track } from '@/shared/lib/analytics';
-import { confirm, haptics, openInMaps } from '@/shared/lib/platform';
+import { confirm, haptics, openInMaps, openUrl } from '@/shared/lib/platform';
 import { Map } from '@/shared/map';
 import { lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
 import {
@@ -25,6 +26,7 @@ import {
 } from '@/shared/ui';
 import { useAppStore } from '@/store';
 import { CATEGORIES, CATEGORY_META } from '../categories';
+import { PlacePhotoView, usePlacePhoto } from '../components/PlacePhotoView';
 import { placeToMarker } from '../markers';
 import { DEFAULT_VAULT_EMOJI, vaultsWith } from '../vaults';
 
@@ -94,6 +96,7 @@ export function PlaceDetailScreen({ id }: { id: string }) {
           ),
         }}
       />
+      <PlaceHero place={place} />
       <View style={[styles.mapWrap, lift(dark)]}>
         <Map markers={markers} interactive={false} />
       </View>
@@ -121,14 +124,14 @@ export function PlaceDetailScreen({ id }: { id: string }) {
         <Button
           title="Directions"
           iconName="navigate"
-          style={styles.flex}
+          style={styles.action}
           onPress={() => openInMaps(place)}
         />
         <Button
           title={place.visitedAt ? 'Visited' : 'Mark visited'}
           variant={place.visitedAt ? 'secondary' : 'tinted'}
           iconName={place.visitedAt ? 'checkmark-circle' : 'checkmark-circle-outline'}
-          style={styles.flex}
+          style={styles.action}
           onPress={() => {
             if (!place.visitedAt) {
               track('place_visited', { category: place.category });
@@ -208,7 +211,46 @@ export function PlaceDetailScreen({ id }: { id: string }) {
   );
 }
 
+/** The place's photo, when one was found, with the credit Wikipedia's licences ask for. */
+function PlaceHero({ place }: { place: Place }) {
+  const styles = useStyles();
+  const photo = usePlacePhoto(place);
+  if (!photo?.page) return null;
+  const page = photo.page;
+  return (
+    <View style={styles.hero}>
+      <PlacePhotoView place={place} />
+      <Pressable
+        style={styles.credit}
+        accessibilityRole="link"
+        accessibilityLabel={`Photo from Wikipedia: ${page}`}
+        onPress={() =>
+          openUrl(`https://en.wikipedia.org/wiki/${encodeURIComponent(page.replace(/ /g, '_'))}`)
+        }
+      >
+        <Text style={styles.creditText}>Photo · Wikipedia</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((t) => ({
+  hero: {
+    height: 240,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    backgroundColor: t.colors.surfaceSunken,
+  },
+  credit: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  creditText: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FFFFFF' },
   content: { paddingTop: spacing.sm, paddingBottom: spacing.xxxl },
   mapWrap: {
     height: 200,
@@ -221,6 +263,8 @@ const useStyles = makeStyles((t) => ({
   headerActions: { flexDirection: 'row', gap: spacing.sm },
   badges: { flexDirection: 'row', gap: 6, marginBottom: 2 },
   actions: { flexDirection: 'row', gap: 10 },
+  // Two buttons share a phone's width: less side padding keeps "Mark visited" from being cut off.
+  action: { flex: 1, paddingHorizontal: 12 },
   flex: { flex: 1 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   source: {

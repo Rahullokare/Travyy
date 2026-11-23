@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import type { Place } from '@/domain/models';
 import { CONTENT_MAX_WIDTH, makeStyles, radius, spacing } from '@/shared/theme';
 import { EmptyState, Text } from '@/shared/ui';
+import { useMapSheet } from './MapSheet';
 import { PlaceRow } from './PlaceRow';
 
 export interface SpotSection {
@@ -30,6 +31,7 @@ export function SpotList({
   subtitleFor,
   emptyTitle = 'No matches',
   emptyBody = 'Try a different search or filter.',
+  onScrollBeginDrag,
 }: {
   sections: SpotSection[];
   header?: ReactElement;
@@ -37,6 +39,8 @@ export function SpotList({
   subtitleFor?: (place: Place) => string | undefined;
   emptyTitle?: string;
   emptyBody?: string;
+  /** The list started scrolling under a finger (a map sheet opens fully then). */
+  onScrollBeginDrag?: () => void;
 }) {
   const styles = useStyles();
   const rows = useMemo<Row[]>(
@@ -70,6 +74,7 @@ export function SpotList({
       getItemType={(r) => r.type}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      onScrollBeginDrag={onScrollBeginDrag}
       ListHeaderComponent={header}
       ListEmptyComponent={<EmptyState icon="search" title={emptyTitle} body={emptyBody} />}
       contentContainerStyle={styles.content}
@@ -143,3 +148,9 @@ const useStyles = makeStyles((t) => ({
   },
   separator: { height: 1, marginLeft: 72, backgroundColor: t.colors.border },
 }));
+
+/** A SpotList inside a MapSheet: scrolling it opens the sheet fully, so the list gets the room. */
+export function SheetSpotList(props: Omit<Parameters<typeof SpotList>[0], 'onScrollBeginDrag'>) {
+  const { onListScroll } = useMapSheet();
+  return <SpotList {...props} onScrollBeginDrag={onListScroll} />;
+}

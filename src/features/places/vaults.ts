@@ -9,6 +9,9 @@ import type { Place, Vault } from '@/domain/models';
 /** The Liked vault is derived from ❤ marks, not stored. It has a fixed id so routes can name it. */
 export const LIKED_VAULT_ID = 'liked';
 export const LIKED_EMOJI = '❤️';
+/** Every save as one vault, so "all of it on a map" opens the same way as any other vault. */
+export const ALL_VAULT_ID = 'all';
+export const ALL_EMOJI = '🔖';
 
 /** Shown on a vault with no emoji of its own. */
 export const DEFAULT_VAULT_EMOJI = '📍';
@@ -74,6 +77,14 @@ function summarise(id: string, name: string, emoji: string, places: Place[], cus
 /** One vault, custom or Liked, by route id. Undefined when it doesn't exist (deleted on another phone). */
 export function vaultSummary(id: string, vaults: Vault[], places: Place[]): VaultSummary | undefined {
   if (id === LIKED_VAULT_ID) return summarise(id, 'Liked', LIKED_EMOJI, likedPlaces(places), false);
+  if (id === ALL_VAULT_ID)
+    return summarise(
+      id,
+      'All saves',
+      ALL_EMOJI,
+      [...places].sort((a, b) => b.savedAt - a.savedAt),
+      false,
+    );
   const vault = vaults.find((v) => v.id === id);
   if (!vault) return undefined;
   return summarise(
@@ -85,7 +96,14 @@ export function vaultSummary(id: string, vaults: Vault[], places: Place[]): Vaul
   );
 }
 
-/** What the Saves tab lists under "Your vaults": Liked first once anything is liked, then the rest newest first. */
+/** The vaults the person made (and joined), newest first, for the Vaults tab and the vault pickers. */
+export function customVaultSummaries(vaults: Vault[], places: Place[]): VaultSummary[] {
+  return vaults.map((v) =>
+    summarise(v.id, v.name, v.emoji ?? DEFAULT_VAULT_EMOJI, placesInVault(v, places), true),
+  );
+}
+
+/** Liked first once anything is liked, then the vaults the person made, newest first. */
 export function vaultSummaries(vaults: Vault[], places: Place[]): VaultSummary[] {
   const liked = likedPlaces(places);
   return [

@@ -3,7 +3,15 @@ import type { NewPlace } from '@/domain/models';
 import { fromVaultRow, toVaultRow, type VaultRow } from '@/features/sync/vaultRows';
 import { syncVaults, type VaultsRemote } from '@/features/sync/syncVaults';
 import { sanitize, useAppStore } from '@/store';
-import { LIKED_VAULT_ID, placesInVault, vaultSummaries, vaultSummary, vaultsWith } from '../vaults';
+import {
+  ALL_VAULT_ID,
+  customVaultSummaries,
+  LIKED_VAULT_ID,
+  placesInVault,
+  vaultSummaries,
+  vaultSummary,
+  vaultsWith,
+} from '../vaults';
 
 const spot = (name: string, lat: number, city = 'Goa'): NewPlace => ({
   name,
@@ -95,6 +103,19 @@ describe('the Liked vault', () => {
     expect(liked.places.map((p) => p.name)).toHaveLength(2);
     store().toggleLiked(a);
     expect(vaultSummary(LIKED_VAULT_ID, [], store().places)?.places.map((p) => p.id)).toEqual([b]);
+  });
+});
+
+describe('the All saves vault', () => {
+  it('holds every save, newest first, and is never one of the vaults you made', () => {
+    const [a, b] = store().addPlaces([spot('Artjuna', 15.6), spot('Bean Me Up', 15.5)]);
+    useAppStore.setState({
+      places: store().places.map((p) => ({ ...p, savedAt: p.id === a ? 2 : 1 })),
+    });
+    const all = vaultSummary(ALL_VAULT_ID, store().vaults, store().places);
+    expect(all?.places.map((p) => p.id)).toEqual([a, b]);
+    expect(all?.custom).toBe(false);
+    expect(customVaultSummaries(store().vaults, store().places)).toEqual([]);
   });
 });
 

@@ -7,7 +7,7 @@ import type { Place } from '@/domain/models';
 import { haptics } from '@/shared/lib/platform';
 import { CONTENT_MAX_WIDTH, lift, makeStyles, radius, spacing, useTheme } from '@/shared/theme';
 import { Button, EmptyState, Icon, IconBadge, ScreenScroll, Text } from '@/shared/ui';
-import { cityOf, useAppStore } from '@/store';
+import { areaOf, useAppStore } from '@/store';
 import { CATEGORY_META } from '../categories';
 import { SearchField } from '../components/SearchField';
 import { Monogram } from '../components/VaultCard';
@@ -206,7 +206,7 @@ export function AddSpotsScreen({ vaultId }: { vaultId: string }) {
                   onPress={() => toggle(item)}
                   leading={<IconBadge icon={meta.icon} color={meta.color} size={42} />}
                   title={item.name}
-                  subtitle={`${meta.label} · ${cityOf(item)}`}
+                  subtitle={`${meta.label} · ${areaOf(item)}`}
                 />
               </View>
             </View>

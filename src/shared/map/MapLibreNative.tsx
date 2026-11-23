@@ -8,23 +8,21 @@ import {
   type CameraRef,
   type InitialViewState,
   type LngLatBounds,
+  type MapRef,
 } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useImperativeHandle, useMemo, useRef, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { LatLng } from '@/domain/models';
 import { env } from '@/shared/config/env';
-import { FONT_FAMILY } from '@/shared/theme';
+import { FONT_FAMILY, useTheme } from '@/shared/theme';
 import type { MapProps } from './types';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const DEFAULT_PADDING = { top: 80, right: 40, bottom: 80, left: 40 };
-const EMPTY_LINE: GeoJSON.Feature = {
-  type: 'Feature',
-  properties: {},
-  geometry: { type: 'LineString', coordinates: [] },
-};
+/** No route: an empty collection, since MapLibre rejects a line with fewer than two points. */
+const NO_ROUTE: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 /**
  * iOS/Android map on MapLibre Native with free OpenFreeMap vector tiles: no Google key,
@@ -40,10 +38,13 @@ export function MapLibreNative({
   interactive = true,
   onMarkerPress,
   onPress,
+  onLongPress,
   style,
   edgePadding = DEFAULT_PADDING,
 }: MapProps) {
   const cameraRef = useRef<CameraRef>(null);
+  const mapRef = useRef<MapRef>(null);
+  const { dark } = useTheme();
 
   // Initial camera, like native initialRegion / web initial bounds. Computed once.
   const initialViewState = useMemo<InitialViewState>(
@@ -63,14 +64,18 @@ export function MapLibreNative({
         }
         cameraRef.current?.fitBounds(bounds(points), { padding: edgePadding, duration: 600 });
       },
-      centerOn(point) {
-        cameraRef.current?.flyTo({ center: [point.lng, point.lat], zoom: 14, duration: 600 });
+      centerOn(point, zoom = 14) {
+        cameraRef.current?.flyTo({ center: [point.lng, point.lat], zoom, duration: 600 });
+      },
+      async getCenter() {
+        const center = await mapRef.current?.getCenter().catch(() => undefined);
+        return center ? { lng: center[0], lat: center[1] } : undefined;
       },
     }),
     [edgePadding],
   );
 
-  const routeShape = useMemo<GeoJSON.Feature>(
+  const routeShape = useMemo<GeoJSON.Feature | GeoJSON.FeatureCollection>(
     () =>
       route && route.coordinates.length > 1
         ? {
@@ -78,14 +83,15 @@ export function MapLibreNative({
             properties: {},
             geometry: { type: 'LineString', coordinates: route.coordinates.map((p) => [p.lng, p.lat]) },
           }
-        : EMPTY_LINE,
+        : NO_ROUTE,
     [route],
   );
 
   return (
     <MapLibreMap
+      ref={mapRef}
       style={[styles.fill, style]}
-      mapStyle={env.mapStyleUrl}
+      mapStyle={dark ? env.mapStyleUrlDark : env.mapStyleUrl}
       dragPan={interactive}
       touchZoom={interactive}
       doubleTapZoom={interactive}
@@ -93,6 +99,14 @@ export function MapLibreNative({
       touchPitch={false}
       compass={false}
       onPress={() => onPress?.()}
+      onLongPress={
+        onLongPress
+          ? (e) => {
+              const [lng, lat] = e.nativeEvent.lngLat;
+              onLongPress({ lat, lng });
+            }
+          : undefined
+      }
     >
       <Camera ref={cameraRef} initialViewState={initialViewState} />
       <GeoJSONSource id="travyy-route" data={routeShape}>

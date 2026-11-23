@@ -17,7 +17,7 @@ import {
 } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAccountSync } from '@/features/sync/useAccountSync';
@@ -25,6 +25,7 @@ import { logger } from '@/shared/lib/logger';
 import { useWarmUpApi } from '@/shared/lib/useWarmUpApi';
 import { queryClient } from '@/shared/query/queryClient';
 import { AppThemeProvider, FONT_FAMILY, headerTitleFont, useTheme } from '@/shared/theme';
+import { AnimatedSplash } from '@/shared/ui/AnimatedSplash';
 import { Button, EmptyState, IconButton, Screen } from '@/shared/ui';
 import { hydration, useAppStore } from '@/store';
 
@@ -70,6 +71,8 @@ function RootNavigator() {
     [FONT_FAMILY[800]]: PlusJakartaSans_800ExtraBold,
   });
   const ready = hydrated && (fontsLoaded || !!fontError);
+  // Phones get the animated intro after the native splash; the web has no native splash to follow.
+  const [intro, setIntro] = useState(Platform.OS !== 'web');
   useWarmUpApi();
   useAccountSync(hydrated);
 
@@ -77,8 +80,12 @@ function RootNavigator() {
     if (fontError) logger.warn('Fonts failed to load; using the system font', { error: String(fontError) });
   }, [fontError]);
 
+  // With the intro, the native splash is hidden once the intro has drawn its first frame over the
+  // same picture, so the swap can't be seen.
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => {});
+    if (ready && !intro) SplashScreen.hideAsync().catch(() => {});
+    // Only the first `ready` matters; the intro ending must not hide anything twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
   // Map our tokens onto React Navigation so headers, tab bar and transitions match.
@@ -136,12 +143,26 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen name="sign-in" options={modal('')} />
+          <Stack.Screen name="profile" options={{ title: 'You' }} />
+          <Stack.Screen
+            name="new"
+            options={{
+              presentation: 'formSheet',
+              headerShown: false,
+              sheetAllowedDetents: 'fitToContents',
+              sheetGrabberVisible: true,
+              sheetCornerRadius: 28,
+              contentStyle: { backgroundColor: theme.colors.surface },
+            }}
+          />
+          <Stack.Screen name="add-place" options={modal('Save this spot')} />
+          <Stack.Screen name="places" options={{ title: 'Places' }} />
           <Stack.Screen name="place/[id]" options={{ title: '' }} />
           <Stack.Screen name="vault/[country]/index" options={{ title: '' }} />
-          <Stack.Screen name="vault/[country]/[city]" options={{ title: '' }} />
+          <Stack.Screen name="vault/[country]/[city]" options={{ headerShown: false }} />
           <Stack.Screen name="vaults/new" options={modal('New vault')} />
           <Stack.Screen name="vaults/pick" options={modal('Add to vault')} />
-          <Stack.Screen name="vaults/[id]/index" options={{ title: '' }} />
+          <Stack.Screen name="vaults/[id]/index" options={{ headerShown: false }} />
           <Stack.Screen name="vaults/[id]/edit" options={modal('Edit vault')} />
           <Stack.Screen name="vaults/[id]/add" options={modal('Add spots')} />
           <Stack.Screen name="vaults/[id]/share" options={modal('Share')} />
@@ -165,6 +186,12 @@ function RootNavigator() {
         {/* Where Google sign-in comes back to: it can arrive before the rest of the app is ready. */}
         <Stack.Screen name="auth-callback" options={{ headerShown: false, animation: 'none' }} />
       </Stack>
+      {intro ? (
+        <AnimatedSplash
+          onLayout={() => SplashScreen.hideAsync().catch(() => {})}
+          onDone={() => setIntro(false)}
+        />
+      ) : null}
     </NavigationThemeProvider>
   );
 }

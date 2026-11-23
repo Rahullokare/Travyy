@@ -59,9 +59,9 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
         destructive: true,
       })
     ) {
-      // The vault screen underneath is gone too: back to the Saves tab.
+      // The vault screen underneath is gone too: back to the Vaults tab.
       if (router.canDismiss()) router.dismissAll();
-      router.navigate('/saves');
+      router.navigate('/vaults');
       removeVault(existing.id);
     }
   };
@@ -83,7 +83,7 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
     try {
       await leaveVault(existing.id);
       if (router.canDismiss()) router.dismissAll();
-      router.navigate('/saves');
+      router.navigate('/vaults');
     } catch (error) {
       setLeaving(false);
       notify(
@@ -119,7 +119,21 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
   return (
     <View style={styles.flex}>
       <Stack.Screen options={{ title: editing ? 'Edit vault' : 'New vault' }} />
-      <ScreenScroll automaticallyAdjustKeyboardInsets>
+      <ScreenScroll
+        automaticallyAdjustKeyboardInsets
+        footer={
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <View style={styles.footerInner}>
+              <Button
+                title={editing ? 'Save changes' : 'Create vault'}
+                iconName={editing ? 'checkmark' : 'add'}
+                disabled={!valid}
+                onPress={save}
+              />
+            </View>
+          </View>
+        }
+      >
         <View style={styles.preview}>
           <Text style={styles.previewEmoji} accessibilityElementsHidden>
             {emoji}
@@ -179,16 +193,6 @@ export function VaultFormScreen({ id, placeId }: { id?: string; placeId?: string
           <Button title="Delete vault" variant="ghost" iconName="trash-outline" onPress={onDelete} />
         ) : null}
       </ScreenScroll>
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <View style={styles.footerInner}>
-          <Button
-            title={editing ? 'Save changes' : 'Create vault'}
-            iconName={editing ? 'checkmark' : 'add'}
-            disabled={!valid}
-            onPress={save}
-          />
-        </View>
-      </View>
     </View>
   );
 }

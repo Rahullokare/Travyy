@@ -17,7 +17,8 @@ import {
   ScreenHeader,
   Text,
 } from '@/shared/ui';
-import { groupByCity, useAppStore, useLedgerStore } from '@/store';
+import { knownCities, useAppStore, useLedgerStore } from '@/store';
+import { AvatarButton } from '@/features/profile/components/AvatarButton';
 import { suggestedDays } from '../planner';
 
 export function TripsScreen() {
@@ -27,7 +28,7 @@ export function TripsScreen() {
   const places = useAppStore((s) => s.places);
   const ledgers = useLedgerStore((s) => s.ledgers);
   const { canCreateTrip } = useEntitlements();
-  const ready = groupByCity(places).filter((c) => c.places.length >= 3);
+  const ready = knownCities(places).filter((c) => c.places.length >= 3);
 
   const startTrip = (city?: string) => {
     if (!canCreateTrip) {
@@ -92,13 +93,16 @@ export function TripsScreen() {
         title="Trips"
         subtitle={trips.length ? `${trips.length} planned` : undefined}
         right={
-          <IconButton
-            icon="add"
-            variant="tinted"
-            color="primaryText"
-            accessibilityLabel="Plan a trip"
-            onPress={() => startTrip()}
-          />
+          <View style={styles.headerActions}>
+            <IconButton
+              icon="add"
+              variant="tinted"
+              color="primaryText"
+              accessibilityLabel="Plan a trip"
+              onPress={() => startTrip()}
+            />
+            <AvatarButton />
+          </View>
         }
       />
       <FlashList
@@ -170,6 +174,7 @@ export function TripsScreen() {
 }
 
 const useStyles = makeStyles((t) => ({
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   flex: { flex: 1, gap: 2 },
   list: { paddingTop: spacing.sm, paddingBottom: spacing.xxxl },
   column: {

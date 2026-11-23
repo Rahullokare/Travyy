@@ -23,7 +23,9 @@ export interface MapRoute {
 /** Imperative camera controls, identical on native and web. */
 export interface MapHandle {
   fitTo(points: LatLng[]): void;
-  centerOn(point: LatLng): void;
+  centerOn(point: LatLng, zoom?: number): void;
+  /** Where the middle of the map is now, for "drop a pin" picking. */
+  getCenter(): Promise<LatLng | undefined>;
 }
 
 export interface MapProps {
@@ -37,6 +39,8 @@ export interface MapProps {
   interactive?: boolean;
   onMarkerPress?: (id: string) => void;
   onPress?: () => void;
+  /** Press and hold on the map itself (not a pin): where the finger was. */
+  onLongPress?: (point: LatLng) => void;
   style?: StyleProp<ViewStyle>;
   /** Extra padding (px) around framed points, e.g. to keep pins clear of overlays. */
   edgePadding?: { top: number; right: number; bottom: number; left: number };

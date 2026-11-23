@@ -11,4 +11,13 @@ export {
   type VaultSyncState,
 } from './appStore';
 export { sanitizeLedgers, useLedgerStore, type LedgerState, type LedgerStore } from './ledgerStore';
-export { cityOf, groupByCity, UNKNOWN_CITY, visitRate, type CityGroup } from './selectors';
+export {
+  areaOf,
+  cityOf,
+  groupByCity,
+  knownCities,
+  UNKNOWN_CITY,
+  visitRate,
+  type CityGroup,
+} from './selectors';
+export { usePhotoStore, type PlacePhoto } from './photoStore';

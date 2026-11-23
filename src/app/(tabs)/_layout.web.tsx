@@ -44,13 +44,10 @@ export default function TabsLayout() {
         name="saves"
         options={{ title: 'Saves', tabBarIcon: tabIcon('bookmark-outline', 'bookmark') }}
       />
+      <Tabs.Screen name="vaults" options={{ title: 'Vaults', tabBarIcon: tabIcon('grid-outline', 'grid') }} />
       <Tabs.Screen
         name="trips"
         options={{ title: 'Trips', tabBarIcon: tabIcon('airplane-outline', 'airplane') }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{ title: 'You', tabBarIcon: tabIcon('person-circle-outline', 'person-circle') }}
       />
     </Tabs>
   );
