@@ -5,8 +5,8 @@ import { makeStyles, radius, spacing } from '@/shared/theme';
 import { Icon, IconBadge, PressableScale, Text, type IconName } from '@/shared/ui';
 
 /**
- * What "+ New" opens: glide's short sheet of ways in. A link (or a share from another app), a
- * pin dropped anywhere on the map, or a new vault. It's a native sheet, so it sizes to these rows.
+ * What "+ New" opens: glide's short sheet of ways in. A place searched by name, a link (or a
+ * share from another app), a pin dropped anywhere on the map, or a new vault. It's a native sheet, so it sizes to these rows.
  */
 export function NewSheet() {
   const styles = useStyles();
@@ -22,10 +22,17 @@ export function NewSheet() {
         Save something new
       </Text>
       <Option
+        icon="search"
+        color="#11948A"
+        title="Search for a place"
+        body="Type a name: the café a friend told you about"
+        onPress={() => then(() => router.push('/search-place'))}
+      />
+      <Option
         icon="link"
         color="#2F6FE0"
-        title="Paste a link or search"
-        body="A reel, a TikTok, a Google Maps place, or a name"
+        title="Paste a link"
+        body="A reel, a TikTok, a Google Maps place, or a caption"
         onPress={() => then(() => router.push('/add'))}
       />
       <Option

@@ -155,6 +155,7 @@ function RootNavigator() {
               contentStyle: { backgroundColor: theme.colors.surface },
             }}
           />
+          <Stack.Screen name="search-place" options={modal('Search for a place')} />
           <Stack.Screen name="add-place" options={modal('Save this spot')} />
           <Stack.Screen name="places" options={{ title: 'Places' }} />
           <Stack.Screen name="place/[id]" options={{ title: '' }} />
