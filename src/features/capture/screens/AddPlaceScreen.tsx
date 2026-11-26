@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { CATEGORIES, type Category, type LatLng } from '@/domain/models';
+import { CATEGORIES, CategorySchema, type Category, type LatLng } from '@/domain/models';
 import { CATEGORY_META } from '@/features/places/categories';
 import { customVaultSummaries } from '@/features/places/vaults';
 import { track } from '@/shared/lib/analytics';
@@ -33,13 +33,14 @@ function firstNamedPart(address?: string): string | undefined {
 
 /**
  * Saving a spot straight from the map (`/add-place?lat=…&lng=…`): a pin dropped by press-and-hold
- * or by "Drop a pin". The address is looked up while the person types; if the point is on
+ * or by "Drop a pin", or a result picked in place search (which also passes `name` and `category`). The address is looked up while the person types; if the point is on
  * something named (a café, a viewpoint) that name and its kind are filled in for them.
  */
 export function AddPlaceScreen() {
   const styles = useStyles();
   const { dark } = useTheme();
-  const params = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  // `name` and `category` come along when the spot was picked from a search, not dropped on the map.
+  const params = useLocalSearchParams<{ lat?: string; lng?: string; name?: string; category?: string }>();
   const point = useMemo(() => parsePoint(params.lat, params.lng), [params.lat, params.lng]);
   const addPlaces = useAppStore((s) => s.addPlaces);
   const addToVault = useAppStore((s) => s.addToVault);
@@ -48,8 +49,10 @@ export function AddPlaceScreen() {
   const yours = useMemo(() => customVaultSummaries(vaults, places), [vaults, places]);
 
   // Undefined until the person types or picks: until then the map's guess shows.
-  const [typedName, setTypedName] = useState<string>();
-  const [pickedCategory, setPickedCategory] = useState<Category>();
+  const [typedName, setTypedName] = useState<string | undefined>(params.name?.trim() || undefined);
+  const [pickedCategory, setPickedCategory] = useState<Category | undefined>(
+    CategorySchema.safeParse(params.category).data,
+  );
   const [note, setNote] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
 
