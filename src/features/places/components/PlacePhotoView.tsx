@@ -3,7 +3,7 @@ import { Image, StyleSheet, type StyleProp, type ImageStyle } from 'react-native
 import Animated from 'react-native-reanimated';
 import type { Place } from '@/domain/models';
 import { duration, EASE_OUT } from '@/shared/ui';
-import { forgetPhoto, usePlacePhoto } from '../photos';
+import { usePlacePhoto, WIKIMEDIA_HEADERS } from '../photos';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
@@ -20,14 +20,17 @@ export function PlacePhotoView({
 }) {
   const photo = usePlacePhoto(place);
   const [loaded, setLoaded] = useState<string>();
-  if (!photo?.url) return null;
+  // A failed load hides the photo for this session only. Remembering it as "no photo" would hide a
+  // good photo for weeks after a passing network error (or a 403, as Android's default agent got).
+  const [failed, setFailed] = useState<string>();
+  if (!photo?.url || failed === photo.url) return null;
   return (
     <AnimatedImage
-      source={{ uri: photo.url }}
+      source={{ uri: photo.url, headers: WIKIMEDIA_HEADERS }}
       resizeMode="cover"
       accessibilityIgnoresInvertColors
       onLoad={() => setLoaded(photo.url)}
-      onError={() => forgetPhoto(place)}
+      onError={() => setFailed(photo.url)}
       style={[
         StyleSheet.absoluteFill,
         style,

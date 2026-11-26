@@ -41,7 +41,8 @@ export const usePhotoStore = create<PhotoStore>()(
       },
     }),
     {
-      name: 'travyy-photos-v1',
+      // v2: v1 builds stored "no photo" when Android's image loader got a 403, so start afresh.
+      name: 'travyy-photos-v2',
       version: 1,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({ photos: s.photos }),
